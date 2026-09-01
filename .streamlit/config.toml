@@ -1,0 +1,12 @@
+[server]
+# Bind to all network interfaces so the app is reachable via both
+# http://localhost:8501  and  http://<machine-ip>:8501
+address = "0.0.0.0"
+port = 8501
+
+# Disable the "Are you sure you want to leave?" browser dialog
+headless = false
+
+# Allow connections from any origin (needed for LAN access)
+enableCORS = false
+enableXsrfProtection = false

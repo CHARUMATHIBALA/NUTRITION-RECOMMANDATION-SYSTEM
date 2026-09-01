@@ -1,0 +1,55 @@
+/* assets/style.css */
+:root {
+  --bg-light: #f4f7fa;
+  --bg-dark: #1e1e2f;
+  --card-bg-light: #ffffff;
+  --card-bg-dark: #2a2a3d;
+  --text-light: #212529;
+  --text-dark: #e0e0e0;
+  --primary: #2c7a7b;   /* teal */
+  --accent: #38a169;   /* green */
+  --warning: #dd6b20;   /* orange */
+  --danger: #e53e3e;    /* red */
+  --font-family: 'Inter', sans-serif;
+}
+
+[data-theme="light"] {
+  --bg: var(--bg-light);
+  --card-bg: var(--card-bg-light);
+  --text: var(--text-light);
+}
+[data-theme="dark"] {
+  --bg: var(--bg-dark);
+  --card-bg: var(--card-bg-dark);
+  --text: var(--text-dark);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-family);
+  margin: 0;
+  padding: 0;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 1.2rem;
+  margin: 0.6rem 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.metric-icon {font-size: 1.8rem;}
+.metric-label {font-size: 0.9rem;opacity: 0.85;}
+.metric-value {font-size: 1.4rem;font-weight: 600;margin-left: auto;}
+
+.badge {display: inline-block;padding: 0.2rem 0.6rem;border-radius: 8px;font-size: 0.8rem;font-weight: 500;color: #fff;}
+
+.mt-1 {margin-top: 0.4rem;}
+.mt-2 {margin-top: 0.8rem;}
+.mb-1 {margin-bottom: 0.4rem;}
+.mb-2 {margin-bottom: 0.8rem;}

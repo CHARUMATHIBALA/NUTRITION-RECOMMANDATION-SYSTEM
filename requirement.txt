@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+scikit-learn
+joblib
+matplotlib
+seaborn
+streamlit-authenticator
+tensorflow
+keras
+plotly
+pyyaml
+fpdf2
