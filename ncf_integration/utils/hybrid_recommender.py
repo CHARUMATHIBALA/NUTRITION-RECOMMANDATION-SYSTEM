@@ -117,28 +117,40 @@ class HybridRecommender:
     def extract_diseases_from_predictions(self, predictions: Dict[str, str]) -> List[str]:
         """
         Extract disease names from prediction results.
-        
+
+        Each value in *predictions* may be either a plain string (legacy) or a
+        dict with a 'label' key (current format from predict.py, e.g.
+        {"label": "Diabetes", "confidence": 95.0}).  We normalise both shapes
+        to a lowercase string before any comparison.
+
         Args:
             predictions: Dictionary with disease predictions
-            
+
         Returns:
             List of detected diseases
         """
         diseases = []
-        
+
+        def _label(val) -> str:
+            """Return the lowercase label string regardless of whether val is
+            a plain string or a {'label': ..., 'confidence': ...} dict."""
+            if isinstance(val, dict):
+                return str(val.get('label', '')).lower().strip()
+            return str(val).lower().strip()
+
         # Check diabetes
-        if predictions.get('diabetes', '').lower() == 'diabetes':
+        if _label(predictions.get('diabetes', '')) == 'diabetes':
             diseases.append('diabetes')
-        
+
         # Check kidney disease
-        if predictions.get('kidney_disease', '').lower() == 'kidney disease':
+        if _label(predictions.get('kidney_disease', '')) == 'kidney disease':
             diseases.append('kidney_disease')
-        
+
         # Check obesity
-        obesity = predictions.get('obesity', '').lower()
-        if obesity in ['obese class i', 'obese class ii', 'obese class iii', 'overweight']:
+        obesity_label = _label(predictions.get('obesity', ''))
+        if obesity_label in ['obese class i', 'obese class ii', 'obese class iii', 'overweight']:
             diseases.append('obesity')
-        
+
         return diseases
     
     def filter_foods_by_diseases(self, diseases: List[str], 

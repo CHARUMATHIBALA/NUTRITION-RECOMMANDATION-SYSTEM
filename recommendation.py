@@ -51,7 +51,7 @@ class IntelligentNutritionRecommender:
         if conditions['has_kidney_disease']:
             filtered_df = filtered_df[
                 (filtered_df["Sodium (mg)"] <= 150) &
-                (filtered_df["Protein (g)"] <= 15)
+                (filtered_df["Protein (g)"] <= 12)
             ]
         
         # Obesity filters: Low calorie, high protein, high fiber

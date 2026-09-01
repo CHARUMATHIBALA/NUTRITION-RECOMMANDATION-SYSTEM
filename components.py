@@ -175,18 +175,31 @@ def prediction_card(
     pred_class: str,
     risk: str = "Low",
     level: str = "low",
-    confidence: float = None,
+    # ── new parameters (replace old `confidence`) ────────────────────
+    final_status: str = "",
+    model_probability: "float | None" = None,
+    # kept for backward-compat; ignored when model_probability is provided
+    confidence: "float | None" = None,
 ):
     """Tall disease prediction card.
 
     Parameters
     ----------
-    icon       : Emoji (e.g. '🩸')
-    name       : Disease display name
-    pred_class : Raw model output label
-    risk       : 'High' | 'Moderate' | 'Low' | 'Normal'
-    level      : 'high' | 'medium' | 'low'  — controls colour scheme
-    confidence : Prediction confidence percentage (0-100)
+    icon              : Emoji (e.g. '🩸')
+    name              : Disease display name
+    pred_class        : Human-readable model output label
+    risk              : Badge text — comes from RiskResult.card_risk_text
+    level             : 'high' | 'medium' | 'low' — controls colour stripe
+    final_status      : RiskResult.final_status — shown as sub-label on card
+    model_probability : RiskResult.model_probability (0–100 float)
+                        Displayed as "Model Probability: X%" NOT "Confidence: X%"
+                        to correctly separate ML probability from clinical risk.
+    confidence        : Legacy parameter — ignored when model_probability given.
+
+    Design note
+    -----------
+    The card NEVER derives risk from pred_class.  All risk information
+    comes pre-computed from backend.risk.classify_risk() via the caller.
     """
     stripe = {
         "high":   "background:linear-gradient(90deg,#EF4444,#F43F5E);",
@@ -208,10 +221,50 @@ def prediction_card(
 
     dot = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(level, "🟢")
 
-    # Add confidence display if available
-    confidence_html = ""
-    if confidence is not None:
-        confidence_html = f"<div class='pred-confidence'>Confidence: {confidence}%</div>"
+    # ── Badge text — use card_risk_text, never append " Risk" blindly ─
+    # "Screening Flag" and "Unavailable" should not get " Risk" appended.
+    _no_suffix = {"Screening Flag", "Unavailable", "Borderline",
+                  "Model Flag", "Normal"}
+    badge_text = risk if (risk in _no_suffix or risk.endswith("Risk")) else f"{risk} Risk"
+
+    # ── Probability display ───────────────────────────────────────────
+    # Use model_probability when available (new path).
+    # Fall back to legacy confidence for backward compat.
+    _prob = model_probability if model_probability is not None else confidence
+    prob_html = ""
+    if _prob is not None:
+        # Label it "Model Probability" to make clear this is NOT clinical risk.
+        prob_html = (
+            f"<div class='pred-confidence'>"
+            f"Model Probability: {_prob:.1f}%"
+            f"</div>"
+        )
+
+    # ── Final-status sub-label (shown below the badge) ────────────────
+    # Only rendered when final_status differs meaningfully from badge_text.
+    status_html = ""
+    if final_status and final_status not in ("", "Unknown", risk):
+        # Color-coded sub-label so the user can immediately see the distinction
+        # between "Screening Flag" (blue) and "High Risk" (red).
+        _status_colors = {
+            "High Risk":      ("background:#FEE2E2;color:#991B1B;",   "🔴"),
+            "Moderate Risk":  ("background:#FEF3C7;color:#92400E;",   "🟡"),
+            "Model Flag":     ("background:#EFF6FF;color:#1E40AF;",   "🔵"),
+            "Low Risk":       ("background:#D1FAE5;color:#065F46;",   "🟢"),
+            "Borderline":     ("background:#FEF3C7;color:#92400E;",   "🟡"),
+            "Unavailable":    ("background:#F1F5F9;color:#64748B;",   "⚪"),
+        }
+        _sc, _sdot = _status_colors.get(
+            final_status,
+            ("background:#F1F5F9;color:#64748B;", "ℹ️"),
+        )
+        status_html = (
+            f"<div style='margin-top:0.5rem;padding:0.25rem 0.7rem;"
+            f"border-radius:99px;font-size:0.72rem;font-weight:700;"
+            f"display:inline-block;{_sc}'>"
+            f"{_sdot}&nbsp;{final_status}"
+            f"</div>"
+        )
 
     st.markdown(
         f"""
@@ -220,8 +273,9 @@ def prediction_card(
             <div class='pred-icon-wrap' style='{icon_bg}'>{icon}</div>
             <div class='pred-name'>{name}</div>
             <div class='pred-result'>{pred_class}</div>
-            <span class='pred-risk-badge {badge_cls}'>{dot}&nbsp;{risk} Risk</span>
-            {confidence_html}
+            <span class='pred-risk-badge {badge_cls}'>{dot}&nbsp;{badge_text}</span>
+            {status_html}
+            {prob_html}
         </div>
         """,
         unsafe_allow_html=True,
@@ -583,12 +637,16 @@ def download_button(data, filename: str = "report", format: str = "json"):
             pdf.set_font("Arial", size=10)
             pdf.multi_cell(0, 7, safe_data)
 
-        # Get PDF output as bytes
-        pdf_output = pdf.output(dest='S')
-        if isinstance(pdf_output, str):
-            pdf_bytes = pdf_output.encode('latin-1')
-        else:
-            pdf_bytes = pdf_output
+        # Get PDF output as bytes — fpdf2 >= 2.2.0 returns bytearray from output()
+        # bytes() wraps bytearray cleanly; never call .encode() on bytearray
+        # Get PDF output as bytes. Use dest='S' to get a string representation and encode safely.
+        try:
+            pdf_output = pdf.output(dest='S')
+            # Ensure we have a bytes object; encode with latin-1 and replace unknown chars.
+            pdf_bytes = pdf_output.encode('latin-1', errors='replace')
+        except Exception:
+            # Fallback for older fpdf versions that return a bytearray directly.
+            pdf_bytes = bytes(pdf.output())
         st.download_button(
             label="📥 Download PDF Report",
             data=pdf_bytes,
@@ -599,3 +657,178 @@ def download_button(data, filename: str = "report", format: str = "json"):
 
     else:
         st.error(f"Unsupported format: {format}")
+
+
+# ════════════════════════════════════════════════════════════════════
+#  XAI — FEATURE IMPORTANCE CHART  (full-width Plotly, no expander)
+# ════════════════════════════════════════════════════════════════════
+
+def chart_xai_feature_importance(feature_rows: list, disease_name: str = "") -> None:
+    """Render a full-width horizontal Plotly bar chart of feature importances.
+
+    Must be called at full page width (not inside a narrow column) so the
+    outside text labels have room to render without overlapping the bars.
+    """
+    if not feature_rows:
+        return
+
+    _impact_colour = {
+        "High":   "#EF4444",
+        "Medium": "#F59E0B",
+        "Low":    "#10B981",
+    }
+
+    # Build lists in display order (highest importance last = top of chart)
+    rows_display = list(reversed(feature_rows))
+    labels  = [r.feature for r in rows_display]
+    scores  = [round(r.importance * 100, 2) for r in rows_display]
+    colours = [_impact_colour.get(r.impact, "#6366F1") for r in rows_display]
+    hover   = [
+        f"<b>{r.feature}</b><br>Value: {r.value}<br>"
+        f"Status: {r.direction}<br>Impact: {r.impact}"
+        for r in rows_display
+    ]
+    outside_text = [f"{r.value}" for r in rows_display]
+
+    fig = go.Figure(go.Bar(
+        x=scores,
+        y=labels,
+        orientation="h",
+        marker_color=colours,
+        marker_line_width=0,
+        hovertemplate=hover,
+        hoverinfo="text",
+        text=outside_text,
+        textposition="outside",
+        textfont=dict(size=11, color="#475569"),
+        cliponaxis=False,
+    ))
+
+    max_score = max(scores) if scores else 1
+    fig.update_layout(
+        xaxis=dict(
+            title="Contribution Score",
+            range=[0, max_score * 1.60],
+            showgrid=True,
+            gridcolor="rgba(203,213,225,0.4)",
+            zeroline=False,
+            tickfont=dict(size=10),
+        ),
+        yaxis=dict(
+            tickfont=dict(size=12),
+            automargin=True,
+        ),
+        showlegend=False,
+        bargap=0.30,
+        margin=dict(l=10, r=10, t=10, b=30),
+    )
+    fig = _theme(fig, height=max(160, len(feature_rows) * 46))
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def xai_explanation_panel(xai_result, disease_name: str = "") -> None:
+    """Render the XAI explanation panel for one disease — inline, no expander.
+
+    Layout (all full-width, no columns):
+      1. Method note
+      2. Legend (High / Medium / Low chips)
+      3. HTML feature-bar rows  (pure CSS bars — no Plotly, no columns)
+      4. Plotly horizontal bar chart
+      5. Patient-friendly summary box
+      6. Disclaimer
+
+    Using st.expander() caused the chevron arrow to bleed into the label text
+    when rendered inside narrow columns — it has been removed entirely.
+    The parent app.py now uses st.tabs() per disease which provides the same
+    collapsible UX at full page width.
+    """
+    if not xai_result.available:
+        st.markdown(
+            f"<div class='xai-method-note'>ℹ️ Explanation unavailable for "
+            f"<strong>{disease_name}</strong>. {xai_result.error or ''}</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    rows = xai_result.feature_rows
+    if not rows:
+        st.info("No feature data available.")
+        return
+
+    # ── 1. Method note ────────────────────────────────────────────────
+    st.markdown(
+        f"<div class='xai-method-note'>"
+        f"<strong>Method:</strong> {xai_result.method}. "
+        "Each score = model feature weight × how far your value deviates from "
+        "the clinical reference range."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── 2. Legend ─────────────────────────────────────────────────────
+    st.markdown(
+        "<div class='xai-legend'>"
+        "<span class='xai-legend-item'>"
+        "<span class='xai-legend-dot high'></span>High impact</span>"
+        "<span class='xai-legend-item'>"
+        "<span class='xai-legend-dot medium'></span>Medium impact</span>"
+        "<span class='xai-legend-item'>"
+        "<span class='xai-legend-dot low'></span>Low impact</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── 3. HTML feature rows (pure CSS bars) ──────────────────────────
+    # Normalise scores to 0–100% relative to the highest score
+    max_score = max(r.importance for r in rows) or 1.0
+    _dir_class = {
+        "↑ Above normal": "above",
+        "↓ Below normal": "below",
+        "✓ Normal range": "normal",
+    }
+    _dir_label = {
+        "↑ Above normal": "↑ Above",
+        "↓ Below normal": "↓ Below",
+        "✓ Normal range": "✓ Normal",
+    }
+
+    row_html = ""
+    for r in rows:
+        pct        = round(r.importance / max_score * 100, 1)
+        imp_cls    = r.impact.lower()   # "high" | "medium" | "low"
+        dir_cls    = _dir_class.get(r.direction, "normal")
+        dir_lbl    = _dir_label.get(r.direction, r.direction)
+        row_html  += (
+            f"<div class='xai-feature-row'>"
+            f"  <span class='xai-feat-name'>{r.feature}</span>"
+            f"  <div class='xai-bar-wrap'>"
+            f"    <div class='xai-bar-fill {imp_cls}' style='width:{pct}%'></div>"
+            f"  </div>"
+            f"  <span class='xai-value-chip'>{r.value}</span>"
+            f"  <span class='xai-dir {dir_cls}'>{dir_lbl}</span>"
+            f"</div>"
+        )
+
+    st.markdown(
+        f"<div class='xai-panel'>{row_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── 4. Plotly chart (full-width, rendered outside the panel div) ──
+    chart_xai_feature_importance(rows, disease_name)
+
+    # ── 5. Summary ────────────────────────────────────────────────────
+    if xai_result.summary:
+        st.markdown(
+            f"<div class='xai-summary'>💡 {xai_result.summary}</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── 6. Disclaimer ─────────────────────────────────────────────────
+    st.markdown(
+        "<div class='xai-disclaimer'>"
+        "⚠️ This is a screening result only. It does not constitute a medical "
+        "diagnosis. Please consult a qualified healthcare professional."
+        "</div>",
+        unsafe_allow_html=True,
+    )

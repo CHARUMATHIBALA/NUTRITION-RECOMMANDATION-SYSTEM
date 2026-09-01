@@ -41,6 +41,29 @@ body {
   display: flex;
   align-items: center;
   gap: 0.8rem;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 1.2rem;
+  margin: 0.6rem 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 1.2rem;
+  margin: 0.6rem 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
 }
 
 .metric-icon {font-size: 1.8rem;}

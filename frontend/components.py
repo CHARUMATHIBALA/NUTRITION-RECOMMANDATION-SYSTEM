@@ -39,6 +39,20 @@ def load_css():
 
 def metric_card(label: str, value: str, icon: str = "", color: str = "#4caf50"):
     """Render a rounded metric card.
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 1.2rem;
+      margin: 0.6rem 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.6rem;
+      min-width: 0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
     Parameters
     ----------
     label : str
@@ -90,7 +104,7 @@ def prediction_card(name: str, pred_class: str, confidence: float, risk: str, se
         Accent colour for the card.
     """
     html = f"""
-    <div class='card' style='border-left:4px solid {color};'>
+    <div class='card prediction-card' style='border-left:4px solid {color};'>
         <div class='metric-icon'>{name}</div>
         <div class='metric-label'>Class: {pred_class}</div>
         <div class='metric-value'>Confidence: {confidence:.2%}</div>
