@@ -11,3 +11,4 @@ keras
 plotly
 pyyaml
 fpdf2
+python-dotenv

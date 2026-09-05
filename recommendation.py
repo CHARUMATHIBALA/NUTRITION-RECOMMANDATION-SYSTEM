@@ -1,6 +1,7 @@
 import pandas as pd
 from models import food_df
-
+import config
+from typing import List, Dict, Any, Optional
 
 class IntelligentNutritionRecommender:
     """
@@ -11,7 +12,7 @@ class IntelligentNutritionRecommender:
     def __init__(self):
         self.df = food_df.copy()
         
-    def _get_disease_conditions(self, diseases):
+    def _get_disease_conditions(self, diseases: List[str] | str) -> Dict[str, bool]:
         """
         Get filtering conditions based on predicted diseases.
         Handles multiple diseases by combining all constraints.
@@ -33,7 +34,7 @@ class IntelligentNutritionRecommender:
                 
         return conditions
     
-    def _apply_disease_filters(self, conditions):
+    def _apply_disease_filters(self, conditions: Dict[str, bool]) -> pd.DataFrame:
         """
         Apply food filters based on disease conditions.
         Multiple diseases result in stricter combined filters.
@@ -43,34 +44,34 @@ class IntelligentNutritionRecommender:
         # Diabetes filters: Low GI,高 fiber, low sugar
         if conditions['has_diabetes']:
             filtered_df = filtered_df[
-                (filtered_df["Free Sugar (g)"] <= 8) &
-                (filtered_df["Calories (kcal)"] <= 400)
+                (filtered_df["Free Sugar (g)"] <= config.DIABETES_MAX_SUGAR) &
+            (filtered_df["Calories (kcal)"] <= config.DIABETES_MAX_CALORIES)
             ]
         
         # Kidney Disease filters: Low sodium, low potassium, controlled protein
         if conditions['has_kidney_disease']:
             filtered_df = filtered_df[
-                (filtered_df["Sodium (mg)"] <= 150) &
-                (filtered_df["Protein (g)"] <= 12)
+                (filtered_df["Sodium (mg)"] <= config.KIDNEY_MAX_SODIUM) &
+            (filtered_df["Protein (g)"] <= config.KIDNEY_MAX_PROTEIN)
             ]
         
         # Obesity filters: Low calorie, high protein, high fiber
         if conditions['has_obesity']:
             filtered_df = filtered_df[
-                (filtered_df["Calories (kcal)"] <= 350) &
-                (filtered_df["Fats (g)"] <= 15)
+                (filtered_df["Calories (kcal)"] <= config.OBESITY_MAX_CALORIES) &
+            (filtered_df["Fats (g)"] <= config.OBESITY_MAX_FAT)
             ]
         
         # If no disease, apply balanced diet filters
         if not any(conditions.values()):
             filtered_df = filtered_df[
-                (filtered_df["Calories (kcal)"] <= 500) &
-                (filtered_df["Free Sugar (g)"] <= 15)
+                (filtered_df["Calories (kcal)"] <= config.CALORIES_MAX_NORMAL) &
+            (filtered_df["Free Sugar (g)"] <= config.FREE_SUGAR_MAX_NORMAL)
             ]
         
         return filtered_df
     
-    def _calculate_nutritional_score(self, row, conditions):
+    def _calculate_nutritional_score(self, row: pd.Series, conditions: Dict[str, bool]) -> float:
         """
         Calculate a nutritional score based on disease conditions.
         Higher score = better match for the condition.
@@ -78,35 +79,43 @@ class IntelligentNutritionRecommender:
         score = 0
         
         # Fiber is always beneficial
-        score += row["Fibre (g)"] * 2
+
         
         if conditions['has_diabetes']:
-            # Penalize sugar and carbs, reward fiber
+            # Penalize sugar and carbs
             score -= row["Free Sugar (g)"] * 3
             score -= row["Carbohydrates (g)"] * 0.5
-            score += row["Fibre (g)"] * 3
-            
+
         if conditions['has_kidney_disease']:
             # Penalize sodium and protein
             score -= row["Sodium (mg)"] * 0.1
             score -= row["Protein (g)"] * 0.5
-            
+
         if conditions['has_obesity']:
-            # Penalize calories and fats, reward protein and fiber
+            # Penalize calories and fats, reward protein
             score -= row["Calories (kcal)"] * 0.05
             score -= row["Fats (g)"] * 0.5
             score += row["Protein (g)"] * 1.5
-            score += row["Fibre (g)"] * 2
-            
-        # If normal, balanced approach
+
+        # Determine fiber contribution (apply highest applicable weight)
+        fiber_weight = 0
+        if conditions['has_diabetes']:
+            fiber_weight = max(fiber_weight, 3)
+        if conditions['has_obesity']:
+            fiber_weight = max(fiber_weight, 2)
+        if not any(conditions.values()):
+            fiber_weight = max(fiber_weight, 1.5)
+        if fiber_weight:
+            score += row["Fibre (g)"] * fiber_weight
+
+        # Normal diet adjustments (protein and sugar) when no disease
         if not any(conditions.values()):
             score += row["Protein (g)"] * 1
-            score += row["Fibre (g)"] * 1.5
             score -= row["Free Sugar (g)"] * 1
             
         return score
     
-    def _get_nutritional_benefits(self, row):
+    def _get_nutritional_benefits(self, row: pd.Series) -> str:
         """
         Generate nutritional benefits description for a food item.
         """
@@ -133,7 +142,7 @@ class IntelligentNutritionRecommender:
             
         return ", ".join(benefits) if benefits else "Balanced nutrition"
     
-    def _get_recommendation_reason(self, row, conditions):
+    def _get_recommendation_reason(self, row: pd.Series, conditions: Dict[str, bool]) -> str:
         """
         Generate reason for recommendation based on disease conditions.
         """
@@ -168,17 +177,16 @@ class IntelligentNutritionRecommender:
                 
         return ". ".join(reasons) if reasons else "Nutritious choice"
     
-    def recommend_food(self, diseases, meal_type=None, top_n=5):
-        """
-        Recommend foods based on disease conditions and meal type.
-        
+    def recommend_food(self, diseases: List[str] | str, meal_type: Optional[str] = None, top_n: int = 5) -> pd.DataFrame:
+        """Recommend foods based on disease conditions and meal type.
+
         Args:
-            diseases: List of predicted diseases
-            meal_type: 'Breakfast', 'Lunch', 'Snack', 'Dinner'
-            top_n: Number of recommendations to return
-            
+            diseases: List of predicted diseases or a single disease string.
+            meal_type: Optional meal type filter (e.g., 'Breakfast', 'Lunch').
+            top_n: Number of top recommendations to return.
+
         Returns:
-            DataFrame with recommended foods and additional info
+            pandas.DataFrame with recommended foods and additional info.
         """
         # Handle single disease string
         if isinstance(diseases, str):
@@ -199,7 +207,7 @@ class IntelligentNutritionRecommender:
             ]
         
         # Calculate nutritional scores
-        filtered_df = filtered_df.copy()
+
         filtered_df['nutritional_score'] = filtered_df.apply(
             lambda row: self._calculate_nutritional_score(row, conditions), axis=1
         )
@@ -228,15 +236,22 @@ class IntelligentNutritionRecommender:
         
         return recommendations[result_columns]
     
-    def get_foods_to_avoid(self, diseases):
-        """
-        Get list of foods to avoid based on disease conditions.
+    def get_foods_to_avoid(self, diseases: List[str] | str) -> List[Dict[str, str]]:
+        """Get list of foods to avoid based on disease conditions.
+
+        Args:
+            diseases: List of predicted diseases or a single disease string.
+
+        Returns:
+            List of dictionaries with 'food' and 'reason' keys.
         """
         if isinstance(diseases, str):
             diseases = [diseases]
             
         conditions = self._get_disease_conditions(diseases)
         avoid_df = self.df.copy()
+        if avoid_df.empty:
+            return []
         
         avoid_reasons = []
         
@@ -294,35 +309,27 @@ class IntelligentNutritionRecommender:
                     
         return unique_avoids[:10]
     
-    def calculate_water_intake(self, weight, activity_level):
-        """
-        Calculate daily water intake recommendation.
-        
+    def calculate_water_intake(self, weight: float, activity_level: str) -> float:
+        """Calculate daily water intake recommendation.
+
         Args:
-            weight: Weight in kg
-            activity_level: Activity level string
-            
+            weight: Weight in kilograms.
+            activity_level: Activity level string (e.g., 'Sedentary', 'Active').
+
         Returns:
-            Daily water intake in liters
+            Daily water intake in liters, rounded to one decimal place.
         """
-        # Base: 35ml per kg
-        base_water = weight * 0.035
-        
+        # Base: 35ml per kg (using config factor)
+        base_water = weight * config.WATER_INTAKE_FACTOR
+
         # Activity multiplier
-        activity_multipliers = {
-            "Sedentary": 1.0,
-            "Light": 1.1,
-            "Moderate": 1.2,
-            "Active": 1.3,
-            "Very Active": 1.4
-        }
-        
-        multiplier = activity_multipliers.get(activity_level, 1.0)
+        multiplier = config.WATER_ACTIVITY_MULTIPLIERS.get(activity_level, 1.0)
         total_water = base_water * multiplier
-        
+
+        total_water = min(total_water, config.MAX_WATER_INTAKE_L)
         return round(total_water, 1)
     
-    def calculate_protein_requirement(self, weight, gender, age, diseases):
+    def calculate_protein_requirement(self, weight: float, gender: str, age: int, diseases) -> float:
         """
         Calculate daily protein requirement based on health conditions.
         
@@ -364,9 +371,11 @@ class IntelligentNutritionRecommender:
             
         total_protein = weight * protein_per_kg
         
+        if conditions['has_kidney_disease']:
+            total_protein = min(total_protein, config.KIDNEY_MAX_PROTEIN)
         return round(total_protein, 1)
     
-    def get_nutrition_tips(self, diseases, bmi, activity_level):
+    def get_nutrition_tips(self, diseases, bmi: float, activity_level: str) -> List[str]:
         """
         Generate personalized nutrition tips.
         """
@@ -417,4 +426,4 @@ class IntelligentNutritionRecommender:
         elif bmi > 25:
             tips.append("Focus on nutrient density over calorie density")
             
-        return tips[:12]  # Return top 12 tips
+        return tips[:config.MAX_TIPS]  # Return top configured tips

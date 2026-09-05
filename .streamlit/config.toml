@@ -10,3 +10,11 @@ headless = false
 # Allow connections from any origin (needed for LAN access)
 enableCORS = false
 enableXsrfProtection = false
+
+[theme]
+# Professional Blue & White Healthcare Theme
+primaryColor = "#2563EB"
+backgroundColor = "#F1F5F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+font = "sans serif"

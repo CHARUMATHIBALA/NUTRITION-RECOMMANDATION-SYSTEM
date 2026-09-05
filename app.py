@@ -5,9 +5,10 @@ Flow
 1. Page config + CSS injection
 2. Theme initialisation (light / dark)
 3. Authentication gate  — stops here if not logged in
-4. Sidebar  — all patient inputs, medical params, goals, settings
-5. Analysis — triggered by "Analyse Health" button
-6. Main area — 4 tabs: Patient Profile · Health Summary · Predictions · Recommendations
+4. Sidebar  — branding, user info, dark mode, reset, logout  (NO patient inputs)
+5. Main page — st.form with all patient / medical inputs + Analyse button
+6. Analysis — triggered by form submission (same logic as before)
+7. Main area — 4 tabs: Patient Profile · Health Summary · Predictions · Recommendations
 """
 
 import streamlit as st
@@ -69,13 +70,21 @@ st.markdown(
 # ════════════════════════════════════════════════════════════════════
 name, auth_status, username = authenticate()
 
-if not auth_status:
-    # Styled login landing — the login widget itself is rendered by
-    # streamlit-authenticator inside authenticate() above
+if auth_status is not True:
+    # Show styled login landing. The login widget itself is rendered
+    # by streamlit-authenticator inside authenticate() above.
     st.markdown(
         """
+        <script>document.documentElement.classList.add('login-view');</script>
+        <style>
+          body, .stApp, section.main {
+            background: linear-gradient(135deg, #EFF6FF 0%, #F0F9FF 55%, #F8FAFC 100%) !important;
+            min-height: 100vh !important;
+          }
+        </style>
         <div class='login-wrapper'>
             <span class='login-logo'>🩺</span>
+            <div class='login-accent-bar'></div>
             <div class='login-title'>Smart Health Dashboard</div>
             <div class='login-subtitle'>
                 AI-Powered Nutrition &amp; Disease Risk Analysis
@@ -89,191 +98,43 @@ if not auth_status:
     st.stop()
 
 # ════════════════════════════════════════════════════════════════════
-#  SIDEBAR
+#  SIDEBAR  — branding, user chip, appearance, reset, logout only.
+#  Patient inputs have been moved to the main-page form below.
 # ════════════════════════════════════════════════════════════════════
 with st.sidebar:
 
-    # Brand block
-    st.markdown(
-        """
-        <div class='sidebar-brand-block'>
-            <div class='sidebar-logo'>🩺</div>
-            <div class='sidebar-brand'>Smart Health</div>
-            <div class='sidebar-tagline'>Nutrition &amp; Risk Dashboard</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Logout
-    if st.button("🚪 Logout", use_container_width=True):
-        logout()
-        st.rerun()
+    # Logged-in user chip
+    _display_name = name or username or "User"
+    components.sidebar_user_chip(_display_name)
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # ── Patient Information ──────────────────────────────────────────
-    st.subheader("Patient Information")
-    pat_name = st.text_input(
-        "Patient Name",
-        value=st.session_state.get("pat_name", ""),
-        max_chars=100,
-        help="Enter the full name of the patient (required).",
-    )
-    age = st.number_input(
-        "Age",
-        min_value=1, max_value=120,
-        value=int(st.session_state.get("age", 30)),
-        step=1,
-        help="Patient age in years (1 – 120).",
-    )
-    gender = st.selectbox(
-        "Gender", ["Male", "Female"],
-        index=0 if st.session_state.get("gender", "Male") == "Male" else 1,
-        help="Biological sex used for BMR and ML model calculations.",
-    )
-    height = st.number_input(
-        "Height (cm)",
-        min_value=100, max_value=250,
-        value=int(st.session_state.get("height", 170)),
-        step=1,
-        help="Patient height in centimetres (100 – 250 cm).",
-    )
-    weight = st.number_input(
-        "Weight (kg)",
-        min_value=30, max_value=300,
-        value=int(st.session_state.get("weight", 70)),
-        step=1,
-        help="Patient weight in kilograms (30 – 300 kg).",
-    )
-    activity = st.selectbox(
-        "Activity Level",
-        ["Sedentary", "Light", "Moderate", "Active", "Very Active"],
-        index=["Sedentary", "Light", "Moderate", "Active", "Very Active"].index(
-            st.session_state.get("activity", "Sedentary")
-        ),
-        help="Daily physical activity level used to calculate caloric needs.",
-    )
-
-    # ── Medical Parameters ───────────────────────────────────────────
-    st.subheader("Medical Parameters")
-    hba1c = st.number_input(
-        "HbA1c (%)",
-        min_value=3.0, max_value=15.0,
-        value=float(st.session_state.get("hba1c", 5.5)),
-        step=0.1,
-        format="%.1f",
-        help="Glycated haemoglobin — normal < 5.7 %, pre-diabetes 5.7–6.4 %, diabetes ≥ 6.5 %.",
-    )
-    glucose = st.number_input(
-        "Blood Glucose (mg/dL)",
-        min_value=50, max_value=500,
-        value=int(st.session_state.get("glucose", 90)),
-        step=1,
-        help="Fasting blood glucose — normal 70–99 mg/dL, pre-diabetes 100–125 mg/dL, diabetes ≥ 126 mg/dL.",
-    )
-    bp = st.number_input(
-        "Systolic BP (mmHg)",
-        min_value=80, max_value=200,
-        value=int(st.session_state.get("bp", 120)),
-        step=1,
-        help="Systolic (upper) blood pressure in mmHg — normal < 120 mmHg.",
-    )
-    bp_diastolic = st.number_input(
-        "Diastolic BP (mmHg)",
-        min_value=40, max_value=140,
-        value=int(st.session_state.get("bp_diastolic", 80)),
-        step=1,
-        help="Diastolic (lower) blood pressure in mmHg — normal < 80 mmHg. "
-             "Recorded for your profile; the disease models use systolic BP.",
-    )
-    creatinine = st.number_input(
-        "Serum Creatinine (mg/dL)",
-        min_value=0.1, max_value=15.0,
-        value=float(st.session_state.get("creatinine", 1.0)),
-        step=0.1,
-        format="%.1f",
-        help="Kidney function marker — normal 0.7–1.2 mg/dL (male), 0.5–1.0 mg/dL (female). Source: Mayo Clinic.",
-    )
-    sodium = st.number_input(
-        "Sodium (mEq/L)",
-        min_value=115.0, max_value=170.0,
-        value=float(st.session_state.get("sodium", 138.0)),
-        step=0.5,
-        format="%.1f",
-        help="Serum sodium — normal 135–145 mEq/L. Values below 115 mEq/L indicate severe hyponatremia.",
-    )
-    potassium = st.number_input(
-        "Potassium (mEq/L)",
-        min_value=2.0, max_value=7.0,
-        value=float(st.session_state.get("potassium", 4.5)),
-        step=0.1,
-        format="%.1f",
-        help="Serum potassium — normal 3.5–5.0 mEq/L.",
-    )
-
-    # ── Goals ────────────────────────────────────────────────────────
-    st.subheader("Goals")
-    goal = st.radio(
-        "Weight Goal",
-        ["Weight Loss", "Weight Gain", "Weight Maintenance"],
-        index=0,
-    )
-
-    # ── Appearance ───────────────────────────────────────────────────
+    # Appearance
     st.subheader("Appearance")
     dark_mode = st.checkbox(
         "🌙 Dark Mode",
         value=st.session_state.get("theme", "light") == "dark",
+        key="sidebar_dark_mode",
     )
     st.session_state.theme = "dark" if dark_mode else "light"
 
-    # ── Disease Selection ────────────────────────────────────────────
-    st.subheader("Disease Selection")
-    auto_predict = st.checkbox("Auto Prediction", value=True,
-                               help="Use AI models to predict diseases automatically")
-    manual_override = st.checkbox("Manual Override", value=False,
-                                  help="Manually select diseases instead of AI prediction")
-    manual_diseases: list = []
-    if manual_override:
-        manual_diseases = st.multiselect(
-            "Select Diseases",
-            ["Diabetes", "Obesity", "Kidney Disease"],
-            help="These will replace the AI predictions",
-        )
+    st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # ── AI Recommendation (NCF) ──────────────────────────────────────
-    if NCF_AVAILABLE:
-        st.subheader("AI Recommendation")
-        use_ncf = st.checkbox(
-            "Neural Collaborative Filtering",
-            value=False,
-            help="Enable AI-powered personalised food recommendations",
-        )
-        st.session_state.use_ncf = use_ncf
+    # Reset Results
+    if st.button("♻️ Reset Results", use_container_width=True, key="sidebar_reset"):
+        keep = {"theme", "authenticator", "authentication_status", "name", "username"}
+        for key in list(st.session_state.keys()):
+            if key not in keep:
+                del st.session_state[key]
+        st.rerun()
 
-    # ── Region ───────────────────────────────────────────────────────
-    st.subheader("Region")
-    indian_states = [
-        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
-        "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh",
-        "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra",
-        "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
-        "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
-        "Uttar Pradesh", "Uttarakhand", "West Bengal",
-        "Andaman and Nicobar Islands", "Chandigarh",
-        "Dadra and Nagar Haveli and Daman and Diu", "Delhi",
-        "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry",
-    ]
-    region = st.selectbox("State / Union Territory", indian_states, index=0)
-
-    # ── Action Buttons ───────────────────────────────────────────────
-    st.subheader("Actions")
-    analyze = st.button("🔍 Analyse Health", use_container_width=True, type="primary")
-    reset   = st.button("♻️ Reset Results",  use_container_width=True)
+    # Logout
+    if st.button("🚪 Logout", use_container_width=True, key="sidebar_logout"):
+        logout()
+        st.rerun()
 
 # ════════════════════════════════════════════════════════════════════
-#  Re-apply theme after sidebar renders
+#  Re-apply theme (sidebar may have just changed it)
 # ════════════════════════════════════════════════════════════════════
 st.markdown(
     f"<script>document.documentElement.setAttribute('data-theme',"
@@ -282,14 +143,20 @@ st.markdown(
 )
 
 # ════════════════════════════════════════════════════════════════════
-#  RESET
+#  HORIZONTAL BRAND HEADER
 # ════════════════════════════════════════════════════════════════════
-if reset:
-    keep = {"theme", "authenticator", "authentication_status", "name", "username"}
-    for key in list(st.session_state.keys()):
-        if key not in keep:
-            del st.session_state[key]
-    st.rerun()
+st.markdown(
+    """
+    <div class='top-brand-header'>
+        <div class='top-brand-icon'>🩺</div>
+        <div class='top-brand-content'>
+            <div class='top-brand-title'>Smart Health</div>
+            <div class='top-brand-subtitle'>Nutrition & Risk Dashboard</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ════════════════════════════════════════════════════════════════════
 #  HERO BANNER
@@ -311,8 +178,22 @@ ACTIVITY_FACTOR = {
     "Very Active": 1.9,
 }
 
+_ACTIVITY_OPTIONS = ["Sedentary", "Light", "Moderate", "Active", "Very Active"]
+
+_INDIAN_STATES = [
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
+    "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh",
+    "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra",
+    "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+    "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+    "Uttar Pradesh", "Uttarakhand", "West Bengal",
+    "Andaman and Nicobar Islands", "Chandigarh",
+    "Dadra and Nagar Haveli and Daman and Diu", "Delhi",
+    "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry",
+]
+
 # ════════════════════════════════════════════════════════════════════
-#  INPUT VALIDATION
+#  INPUT VALIDATION  (unchanged)
 # ════════════════════════════════════════════════════════════════════
 
 def _validate_inputs(
@@ -391,7 +272,6 @@ def _validate_inputs(
         if dbp < 40 or dbp > 140:
             errors.append("❗ **Diastolic BP** must be between 40 and 140 mmHg.")
         else:
-            # cross-field: diastolic must be lower than systolic
             try:
                 if dbp >= int(bp):
                     errors.append(
@@ -399,7 +279,7 @@ def _validate_inputs(
                         f"**Systolic BP** ({bp} mmHg)."
                     )
             except (TypeError, ValueError):
-                pass  # systolic already flagged separately
+                pass
     except (TypeError, ValueError):
         errors.append("❗ **Diastolic BP** must be a whole number between 40 and 140 mmHg.")
 
@@ -431,7 +311,268 @@ def _validate_inputs(
 
 
 # ════════════════════════════════════════════════════════════════════
-#  ANALYSIS  — triggered by "Analyse Health"
+#  MAIN-PAGE FORM  — full-width professional health assessment form.
+#  st.form() prevents reruns on every widget change.
+#  All variable names match what the existing analysis block expects.
+# ════════════════════════════════════════════════════════════════════
+_has_results = "analysis" in st.session_state
+
+# When results already exist, wrap the form in a collapsible expander
+# so the dashboard stays visible without hiding the edit option.
+if _has_results:
+    _form_ctx = st.expander("✏️ Edit Patient Details & Re-run Analysis", expanded=False)
+else:
+    _form_ctx = st.container()
+
+with _form_ctx:
+
+    # ── Page header (shown only when no results yet) ─────────────────
+    if not _has_results:
+        st.markdown(
+            """
+            <div class='assessment-header animate-in'>
+                <h1>🩺 Patient Health Assessment</h1>
+                <div class='accent-line'></div>
+                <p class='sub'>
+                    Enter your health information below to receive personalised
+                    disease risk predictions, nutrition recommendations, and
+                    a tailored meal plan.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        components.form_progress_steps()
+
+    with st.form("health_assessment_form", clear_on_submit=False):
+
+        # ════════════════════════════════════════════════════════════
+        #  SECTION 1 — Personal Information
+        # ════════════════════════════════════════════════════════════
+        st.markdown(
+            "<div class='form-section-card'>"
+            "<div class='form-section-title'>"
+            "  <div class='fst-icon'>👤</div>"
+            "  <h3>Personal Information</h3>"
+            "  <span class='fst-badge'>6 fields</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Row 1 — Name spans full width for comfortable entry
+        pat_name = st.text_input(
+            "Patient Name",
+            value=st.session_state.get("pat_name", ""),
+            max_chars=100,
+            placeholder="Enter the patient's full name",
+            help="Required — minimum 2 characters.",
+        )
+
+        # Row 2 — Age · Gender · Height · Weight  (4 equal columns)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            age = st.number_input(
+                "Age (years)",
+                min_value=1, max_value=120,
+                value=int(st.session_state.get("age", 30)),
+                step=1,
+                help="1 – 120 years.",
+            )
+        with c2:
+            gender = st.selectbox(
+                "Gender",
+                ["Male", "Female"],
+                index=0 if st.session_state.get("gender", "Male") == "Male" else 1,
+                help="Used for BMR & model calculations.",
+            )
+        with c3:
+            height = st.number_input(
+                "Height (cm)",
+                min_value=100, max_value=250,
+                value=int(st.session_state.get("height", 170)),
+                step=1,
+                help="100 – 250 cm.",
+            )
+        with c4:
+            weight = st.number_input(
+                "Weight (kg)",
+                min_value=30, max_value=300,
+                value=int(st.session_state.get("weight", 70)),
+                step=1,
+                help="30 – 300 kg.",
+            )
+
+        # Row 3 — Activity Level (wider, more descriptive options)
+        activity = st.selectbox(
+            "Activity Level",
+            _ACTIVITY_OPTIONS,
+            index=_ACTIVITY_OPTIONS.index(
+                st.session_state.get("activity", "Sedentary")
+            ),
+            help="Your typical daily physical activity level.",
+        )
+
+        st.markdown("</div>", unsafe_allow_html=True)   # close form-section-card
+
+        # ════════════════════════════════════════════════════════════
+        #  SECTION 2 — Medical Parameters
+        # ════════════════════════════════════════════════════════════
+        st.markdown(
+            "<div class='form-section-card'>"
+            "<div class='form-section-title'>"
+            "  <div class='fst-icon'>🩺</div>"
+            "  <h3>Medical Parameters</h3>"
+            "  <span class='fst-badge'>7 fields</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Row 1 — HbA1c · Glucose · Systolic BP · Diastolic BP
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            hba1c = st.number_input(
+                "HbA1c (%)",
+                min_value=3.0, max_value=15.0,
+                value=float(st.session_state.get("hba1c", 5.5)),
+                step=0.1, format="%.1f",
+                help="Normal < 5.7 %  |  Pre-diabetes 5.7–6.4 %  |  Diabetes ≥ 6.5 %",
+            )
+        with m2:
+            glucose = st.number_input(
+                "Blood Glucose (mg/dL)",
+                min_value=50, max_value=500,
+                value=int(st.session_state.get("glucose", 90)),
+                step=1,
+                help="Fasting: Normal 70–99  |  Pre-diabetes 100–125  |  Diabetes ≥ 126",
+            )
+        with m3:
+            bp = st.number_input(
+                "Systolic BP (mmHg)",
+                min_value=80, max_value=200,
+                value=int(st.session_state.get("bp", 120)),
+                step=1,
+                help="Upper blood pressure value. Normal < 120 mmHg.",
+            )
+        with m4:
+            bp_diastolic = st.number_input(
+                "Diastolic BP (mmHg)",
+                min_value=40, max_value=140,
+                value=int(st.session_state.get("bp_diastolic", 80)),
+                step=1,
+                help="Lower blood pressure value. Normal < 80 mmHg.",
+            )
+
+        # Row 2 — Creatinine · Sodium · Potassium  (3 columns, balanced)
+        n1, n2, n3, _n4 = st.columns(4)
+        with n1:
+            creatinine = st.number_input(
+                "Serum Creatinine (mg/dL)",
+                min_value=0.1, max_value=15.0,
+                value=float(st.session_state.get("creatinine", 1.0)),
+                step=0.1, format="%.1f",
+                help="Kidney marker. Normal 0.7–1.2 (M)  |  0.5–1.0 (F) mg/dL.",
+            )
+        with n2:
+            sodium = st.number_input(
+                "Sodium (mEq/L)",
+                min_value=115.0, max_value=170.0,
+                value=float(st.session_state.get("sodium", 138.0)),
+                step=0.5, format="%.1f",
+                help="Normal 135–145 mEq/L.",
+            )
+        with n3:
+            potassium = st.number_input(
+                "Potassium (mEq/L)",
+                min_value=2.0, max_value=7.0,
+                value=float(st.session_state.get("potassium", 4.5)),
+                step=0.1, format="%.1f",
+                help="Normal 3.5–5.0 mEq/L.",
+            )
+        with _n4:
+            st.empty()  # balanced spacer
+
+        st.markdown("</div>", unsafe_allow_html=True)   # close form-section-card
+
+        # ════════════════════════════════════════════════════════════
+        #  SECTION 3 — Health Goals & Recommendation Settings
+        # ════════════════════════════════════════════════════════════
+        st.markdown(
+            "<div class='form-section-card'>"
+            "<div class='form-section-title'>"
+            "  <div class='fst-icon'>🎯</div>"
+            "  <h3>Goals &amp; Recommendation Settings</h3>"
+            "  <span class='fst-badge'>4 fields</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        g1, g2, g3, g4 = st.columns(4)
+
+        _goal_options = ["Weight Loss", "Weight Gain", "Weight Maintenance"]
+        with g1:
+            goal = st.selectbox(
+                "Health Goal",
+                _goal_options,
+                index=_goal_options.index(
+                    st.session_state.get("goal", "Weight Loss")
+                ),
+                help="Your primary weight management objective.",
+            )
+        with g2:
+            region = st.selectbox(
+                "State / Union Territory",
+                _INDIAN_STATES,
+                index=_INDIAN_STATES.index(
+                    st.session_state.get("region", "Andhra Pradesh")
+                ) if st.session_state.get("region", "Andhra Pradesh") in _INDIAN_STATES else 0,
+                help="Used to tailor regional food recommendations.",
+            )
+        with g3:
+            auto_predict = st.checkbox(
+                "Auto Disease Prediction",
+                value=st.session_state.get("auto_predict", True),
+                help="Use AI models to predict diseases automatically.",
+            )
+            manual_override = st.checkbox(
+                "Manual Disease Override",
+                value=st.session_state.get("manual_override", False),
+                help="Manually select diseases instead of AI prediction.",
+            )
+        with g4:
+            if NCF_AVAILABLE:
+                use_ncf = st.checkbox(
+                    "AI Food Recommendations (NCF)",
+                    value=st.session_state.get("use_ncf", False),
+                    help="Enable Neural Collaborative Filtering for personalised food recommendations.",
+                )
+            else:
+                use_ncf = False
+                st.caption("NCF unavailable — rule-based recommendations active.")
+
+        manual_diseases: list = []
+        if manual_override:
+            manual_diseases = st.multiselect(
+                "Select Diseases (Manual Override)",
+                ["Diabetes", "Obesity", "Kidney Disease"],
+                default=st.session_state.get("manual_diseases", []),
+                help="These will replace the AI predictions.",
+            )
+
+        st.markdown("</div>", unsafe_allow_html=True)   # close form-section-card
+
+        # ════════════════════════════════════════════════════════════
+        #  ANALYSE BUTTON  — full-width, prominent CTA
+        # ════════════════════════════════════════════════════════════
+        analyze = st.form_submit_button(
+            "🔍  Analyse My Health",
+            use_container_width=True,
+            type="primary",
+        )
+
+# ════════════════════════════════════════════════════════════════════
+#  ANALYSIS  — triggered by form submission.
+#  All variable names (pat_name, age, gender, …) come from the form
+#  above and are identical to what the existing analysis code expects.
 # ════════════════════════════════════════════════════════════════════
 if analyze:
 
@@ -443,32 +584,32 @@ if analyze:
     )
 
     if _errors:
-        # Show every error in the main area so the user can see them
-        # without having to scroll the sidebar.
         st.error("### ⚠️ Please fix the following before running the analysis:")
         for _err in _errors:
             st.markdown(_err)
-        # Also echo a short note inside the sidebar
-        with st.sidebar:
-            st.error(f"⚠️ {len(_errors)} validation error(s). See main panel.")
 
     else:
-        # All inputs valid — persist current values to session state so
-        # widgets restore correctly after a rerun, then run full analysis.
+        # Persist inputs so form pre-populates correctly on next rerun
         st.session_state.update({
-            "pat_name":     str(pat_name).strip(),
-            "age":          int(age),
-            "gender":       gender,
-            "height":       int(height),
-            "weight":       int(weight),
-            "activity":     activity,
-            "hba1c":        float(hba1c),
-            "glucose":      int(glucose),
-            "bp":           int(bp),
-            "bp_diastolic": int(bp_diastolic),
-            "creatinine":   float(creatinine),
-            "sodium":       float(sodium),
-            "potassium":    float(potassium),
+            "pat_name":       str(pat_name).strip(),
+            "age":            int(age),
+            "gender":         gender,
+            "height":         int(height),
+            "weight":         int(weight),
+            "activity":       activity,
+            "hba1c":          float(hba1c),
+            "glucose":        int(glucose),
+            "bp":             int(bp),
+            "bp_diastolic":   int(bp_diastolic),
+            "creatinine":     float(creatinine),
+            "sodium":         float(sodium),
+            "potassium":      float(potassium),
+            "goal":           goal,
+            "region":         region,
+            "use_ncf":        use_ncf,
+            "auto_predict":   auto_predict,
+            "manual_override":manual_override,
+            "manual_diseases":manual_diseases,
         })
 
     if not _errors:
@@ -480,52 +621,43 @@ if analyze:
             tdee    = calculate_tdee(bmr, ACTIVITY_FACTOR[activity])
 
             # ── Disease predictions ───────────────────────────────────────
-            # Run ML models always (needed for recommendations even with override)
             obesity_result  = predict_obesity(age, gender, bmi)
             diabetes_result = predict_diabetes(age, gender, bmi, hba1c, glucose)
             kidney_result   = predict_kidney(age, gender, bmi, sodium, potassium, bp, creatinine)
 
-            # Extract labels and confidence scores
-            obesity_label = obesity_result["label"] if isinstance(obesity_result, dict) else obesity_result
-            obesity_confidence = obesity_result["confidence"] if isinstance(obesity_result, dict) else None
-
-            diabetes_label = diabetes_result["label"] if isinstance(diabetes_result, dict) else diabetes_result
-            diabetes_confidence = diabetes_result["confidence"] if isinstance(diabetes_result, dict) else None
-
-            kidney_label = kidney_result["label"] if isinstance(kidney_result, dict) else kidney_result
-            kidney_confidence = kidney_result["confidence"] if isinstance(kidney_result, dict) else None
+            obesity_label      = obesity_result["label"]      if isinstance(obesity_result,  dict) else obesity_result
+            obesity_confidence = obesity_result["confidence"] if isinstance(obesity_result,  dict) else None
+            diabetes_label     = diabetes_result["label"]     if isinstance(diabetes_result, dict) else diabetes_result
+            diabetes_confidence= diabetes_result["confidence"]if isinstance(diabetes_result, dict) else None
+            kidney_label       = kidney_result["label"]       if isinstance(kidney_result,   dict) else kidney_result
+            kidney_confidence  = kidney_result["confidence"]  if isinstance(kidney_result,   dict) else None
 
             # Apply manual override if selected
             if manual_override and manual_diseases:
-                # Display overridden labels in the UI
-                obesity  = {"label": "Obesity (Manual)", "confidence": None} if "Obesity" in manual_diseases else obesity_result
-                diabetes = {"label": "Diabetes (Manual)", "confidence": None} if "Diabetes" in manual_diseases else diabetes_result
+                obesity  = {"label": "Obesity (Manual)",        "confidence": None} if "Obesity"       in manual_diseases else obesity_result
+                diabetes = {"label": "Diabetes (Manual)",       "confidence": None} if "Diabetes"      in manual_diseases else diabetes_result
                 kidney   = {"label": "Kidney Disease (Manual)", "confidence": None} if "Kidney Disease" in manual_diseases else kidney_result
-                # Build diseases list from manual selection
                 diseases = list(manual_diseases)
             else:
                 obesity  = obesity_result
                 diabetes = diabetes_result
                 kidney   = kidney_result
-                # Build diseases list from model outputs
                 diseases = []
                 diabetes_str = str(diabetes_label).lower() if diabetes_label is not None else ""
-                kidney_str   = str(kidney_label).lower() if kidney_label is not None else ""
-                obesity_str  = str(obesity_label).lower() if obesity_label is not None else ""
+                kidney_str   = str(kidney_label).lower()   if kidney_label   is not None else ""
+                obesity_str  = str(obesity_label).lower()  if obesity_label  is not None else ""
                 if diabetes_str == "diabetes":
                     diseases.append("Diabetes")
                 if kidney_str == "kidney disease":
                     diseases.append("Kidney Disease")
-                if obesity_str in [
-                    "obese class i", "obese class ii", "obese class iii", "overweight"
-                ]:
+                if obesity_str in ["obese class i", "obese class ii", "obese class iii", "overweight"]:
                     diseases.append("Obesity")
                 if not diseases:
                     diseases = ["Normal"]
 
             # ── NCF recommendations (optional) ────────────────────────────
-            use_ncf = st.session_state.get("use_ncf", False) and NCF_AVAILABLE
-            if use_ncf:
+            _use_ncf = use_ncf and NCF_AVAILABLE
+            if _use_ncf:
                 try:
                     if "hybrid_recommender" not in st.session_state:
                         st.session_state.hybrid_recommender = HybridRecommender()
@@ -551,7 +683,7 @@ if analyze:
                     st.session_state.ncf_diseases = ncf_result["detected_diseases"]
                 except Exception as exc:
                     st.error(f"NCF error: {exc}. Using rule-based recommendations.")
-                    use_ncf = False
+                    _use_ncf = False
 
             # ── Rule-based recommendations ────────────────────────────────
             recommendations = generate_comprehensive_recommendations(
@@ -562,7 +694,7 @@ if analyze:
                 sodium=sodium, potassium=potassium, creatinine=creatinine,
             )
 
-            # ── Build report_data (used for PDF/JSON export) ──────────────
+            # ── Build report_data ─────────────────────────────────────────
             report_data = {
                 "personal": {
                     "name":     pat_name or "—",
@@ -574,62 +706,66 @@ if analyze:
                     "region":   region,
                 },
                 "metrics": {
-                    "BMI":                    round(bmi, 2),
-                    "BMI Category":           bmi_cat,
-                    "BMR (kcal)":             round(bmr, 2),
-                    "TDEE (kcal)":            round(tdee, 2),
-                    "Water Intake (L)":       recommendations.get("water_intake"),
-                    "Protein Requirement (g)":recommendations.get("protein_requirement"),
+                    "BMI":                     round(bmi, 2),
+                    "BMI Category":            bmi_cat,
+                    "BMR (kcal)":              round(bmr, 2),
+                    "TDEE (kcal)":             round(tdee, 2),
+                    "Water Intake (L)":        recommendations.get("water_intake"),
+                    "Protein Requirement (g)": recommendations.get("protein_requirement"),
                 },
                 "predictions": {
                     "Obesity": {
-                        "label": obesity_label if isinstance(obesity, dict) else str(obesity),
-                        "confidence": obesity_confidence if isinstance(obesity, dict) else None
+                        "label":      obesity_label if isinstance(obesity, dict) else str(obesity),
+                        "confidence": obesity_confidence if isinstance(obesity, dict) else None,
                     },
                     "Diabetes": {
-                        "label": diabetes_label if isinstance(diabetes, dict) else str(diabetes),
-                        "confidence": diabetes_confidence if isinstance(diabetes, dict) else None
+                        "label":      diabetes_label if isinstance(diabetes, dict) else str(diabetes),
+                        "confidence": diabetes_confidence if isinstance(diabetes, dict) else None,
                     },
                     "Kidney Disease": {
-                        "label": kidney_label if isinstance(kidney, dict) else str(kidney),
-                        "confidence": kidney_confidence if isinstance(kidney, dict) else None
+                        "label":      kidney_label if isinstance(kidney, dict) else str(kidney),
+                        "confidence": kidney_confidence if isinstance(kidney, dict) else None,
                     },
                 },
-                "nutrition_tips":   recommendations.get("nutrition_tips", []),
-                "foods_to_avoid":   recommendations.get("foods_to_avoid", []),
+                "nutrition_tips": recommendations.get("nutrition_tips", []),
+                "foods_to_avoid": recommendations.get("foods_to_avoid", []),
             }
 
-            # ── Persist to SQLite (wired!) ────────────────────────────────
+            # ── Persist to SQLite ─────────────────────────────────────────
             try:
                 save_analysis(
-                    user_id=None,         # anonymous until user table is populated
+                    user_id=None,
                     patient_name=pat_name or username or "unknown",
                     data=report_data,
                 )
             except Exception:
-                pass  # database errors must never crash the UI
+                pass
 
             # ── Store everything in session state ─────────────────────────
             st.session_state.report_data = report_data
             st.session_state.analysis = {
                 "bmi": bmi, "bmi_cat": bmi_cat, "bmr": bmr, "tdee": tdee,
-                "obesity": obesity, "diabetes": diabetes, "kidney": kidney,
-                "obesity_label": obesity_label, "obesity_confidence": obesity_confidence,
-                "diabetes_label": diabetes_label, "diabetes_confidence": diabetes_confidence,
-                "kidney_label": kidney_label, "kidney_confidence": kidney_confidence,
-                # RiskResult objects — single source of truth for Tab 2
+                "obesity":  obesity,  "diabetes":  diabetes,  "kidney": kidney,
+                "obesity_label":       obesity_label,
+                "obesity_confidence":  obesity_confidence,
+                "diabetes_label":      diabetes_label,
+                "diabetes_confidence": diabetes_confidence,
+                "kidney_label":        kidney_label,
+                "kidney_confidence":   kidney_confidence,
+                # RiskResult objects
                 "obesity_risk":  obesity_result.get("risk")  if isinstance(obesity_result,  dict) else None,
                 "diabetes_risk": diabetes_result.get("risk") if isinstance(diabetes_result, dict) else None,
                 "kidney_risk":   kidney_result.get("risk")   if isinstance(kidney_result,   dict) else None,
-                "diseases": diseases, "recommendations": recommendations,
-                "use_ncf": use_ncf,
-                # Store all input variables for display in tabs
-                "pat_name": pat_name, "age": age, "gender": gender,
-                "height": height, "weight": weight, "activity": activity,
-                "region": region, "goal": goal,
-                "bp_diastolic": int(bp_diastolic),
-                # Medical params stored here so XAI in Tab 2 uses the exact
-                # values that were fed to the models — not widget state.
+                "diseases":         diseases,
+                "recommendations":  recommendations,
+                "use_ncf":          _use_ncf,
+                # Input values for Profile tab display
+                "pat_name":    pat_name,    "age":      age,
+                "gender":      gender,      "height":   height,
+                "weight":      weight,      "activity": activity,
+                "region":      region,      "goal":     goal,
+                "bp_diastolic":int(bp_diastolic),
+                # Medical params for XAI consistency
                 "hba1c":      float(hba1c),
                 "glucose":    float(glucose),
                 "bp":         int(bp),
@@ -637,17 +773,20 @@ if analyze:
                 "potassium":  float(potassium),
                 "creatinine": float(creatinine),
             }
+
+            st.rerun()   # re-render so the dashboard tabs appear immediately
+
         except Exception as e:
             st.error(f"❌ Error during analysis: {str(e)}")
             import traceback
             st.error(traceback.format_exc())
 
 # ════════════════════════════════════════════════════════════════════
-#  MAIN CONTENT
+#  MAIN CONTENT — dashboard tabs (shown only after analysis)
 # ════════════════════════════════════════════════════════════════════
 
 if "analysis" not in st.session_state:
-    # ── Welcome / landing screen ─────────────────────────────────────
+    # Welcome screen shown until the user submits the form
     components.welcome_screen()
 
 else:
@@ -661,27 +800,29 @@ else:
     diseases        = a["diseases"]
     recommendations = a["recommendations"]
     use_ncf         = a["use_ncf"]
-    # Retrieve confidence scores
-    obesity_label = a.get("obesity_label", str(obesity) if not isinstance(obesity, dict) else obesity.get("label", ""))
+    obesity_label      = a.get("obesity_label",      str(obesity)  if not isinstance(obesity,  dict) else obesity.get("label",  ""))
     obesity_confidence = a.get("obesity_confidence", None)
-    diabetes_label = a.get("diabetes_label", str(diabetes) if not isinstance(diabetes, dict) else diabetes.get("label", ""))
-    diabetes_confidence = a.get("diabetes_confidence", None)
-    kidney_label = a.get("kidney_label", str(kidney) if not isinstance(kidney, dict) else kidney.get("label", ""))
-    kidney_confidence = a.get("kidney_confidence", None)
-    # RiskResult objects from backend.risk — single source of truth for Tab 2
+    diabetes_label     = a.get("diabetes_label",     str(diabetes) if not isinstance(diabetes, dict) else diabetes.get("label", ""))
+    diabetes_confidence= a.get("diabetes_confidence",None)
+    kidney_label       = a.get("kidney_label",       str(kidney)   if not isinstance(kidney,   dict) else kidney.get("label",   ""))
+    kidney_confidence  = a.get("kidney_confidence",  None)
     obesity_risk  = a.get("obesity_risk",  None)
     diabetes_risk = a.get("diabetes_risk", None)
     kidney_risk   = a.get("kidney_risk",   None)
-    # Retrieve input variables
-    pat_name     = a.get("pat_name", "")
-    age          = a.get("age", 30)
-    gender       = a.get("gender", "Male")
-    height       = a.get("height", 170)
-    weight       = a.get("weight", 70)
-    activity     = a.get("activity", "Sedentary")
-    region       = a.get("region", "Andhra Pradesh")
-    goal         = a.get("goal", "Weight Loss")
+    pat_name     = a.get("pat_name",  "")
+    age          = a.get("age",       30)
+    gender       = a.get("gender",    "Male")
+    height       = a.get("height",    170)
+    weight       = a.get("weight",    70)
+    activity     = a.get("activity",  "Sedentary")
+    region       = a.get("region",    "Andhra Pradesh")
+    goal         = a.get("goal",      "Weight Loss")
     bp_diastolic = a.get("bp_diastolic", 80)
+    manual_override  = st.session_state.get("manual_override", False)
+    manual_diseases  = st.session_state.get("manual_diseases", [])
+
+    components.dashboard_stats_strip(bmi, bmi_cat, tdee, diseases)
+
     # ── Tabs ─────────────────────────────────────────────────────────
     tabs = st.tabs([
         "👤 Patient Profile",
@@ -698,14 +839,14 @@ else:
 
         col_a, col_b = st.columns(2, gap="large")
         left_items = [
-            ("🧑", "Name",           pat_name or "—"),
-            ("📅", "Age",            f"{age} years"),
-            ("⚥",  "Gender",         gender),
+            ("🧑", "Name",          pat_name or "—"),
+            ("📅", "Age",           f"{age} years"),
+            ("⚥",  "Gender",        gender),
         ]
         right_items = [
-            ("📏", "Height",          f"{height} cm"),
-            ("⚖️", "Weight",          f"{weight} kg"),
-            ("🏃", "Activity Level",  activity),
+            ("📏", "Height",         f"{height} cm"),
+            ("⚖️", "Weight",         f"{weight} kg"),
+            ("🏃", "Activity Level", activity),
         ]
         with col_a:
             for ico, lbl, val in left_items:
@@ -714,10 +855,8 @@ else:
             for ico, lbl, val in right_items:
                 components.profile_card(ico, lbl, val)
 
-        # Blood pressure summary row
         components.section_header("🩺", "Blood Pressure")
         bp_col1, bp_col2 = st.columns(2, gap="large")
-        # Retrieve stored bp from analysis for display
         _stored_bp = a.get("bp", "—")
         with bp_col1:
             components.profile_card("💉", "Systolic BP",  f"{_stored_bp} mmHg")
@@ -737,38 +876,35 @@ else:
     with tabs[1]:
         components.section_header("📊", "Key Health Metrics")
 
-        # Row 1 — 4 KPI cards
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             components.metric_card("BMI", f"{bmi:.1f}", "⚖️", "#2563EB")
         with c2:
             cat_color = (
-                "#10B981" if "normal"     in bmi_cat.lower() else
-                "#F59E0B" if "overweight" in bmi_cat.lower() else
-                "#EF4444"
+                "#16A34A" if "normal"     in bmi_cat.lower() else
+                "#D97706" if "overweight" in bmi_cat.lower() else
+                "#DC2626"
             )
             components.metric_card("BMI Category", bmi_cat, "🏷️", cat_color)
         with c3:
-            components.metric_card("Daily Calories", f"{tdee:.0f} kcal", "🔥", "#F59E0B")
+            components.metric_card("Daily Calories", f"{tdee:.0f} kcal", "🔥", "#D97706")
         with c4:
-            components.metric_card("BMR", f"{bmr:.0f} kcal", "⚡", "#6366F1")
+            components.metric_card("BMR", f"{bmr:.0f} kcal", "⚡", "#7C3AED")
 
-        # Row 2 — Water & Protein
         c5, c6 = st.columns(2)
         with c5:
             components.metric_card(
                 "Water Intake",
                 f"{recommendations.get('water_intake', '—')} L",
-                "💧", "#06B6D4",
+                "💧", "#0284C7",
             )
         with c6:
             components.metric_card(
                 "Protein Requirement",
                 f"{recommendations.get('protein_requirement', '—')} g",
-                "🥩", "#10B981",
+                "🥩", "#16A34A",
             )
 
-        # BMI status alert
         if bmi < 18.5:
             components.status_banner("⚠️", "Underweight",
                 f"Your BMI of <strong>{bmi:.1f}</strong> is below the healthy range "
@@ -786,7 +922,6 @@ else:
                 f"Your BMI of <strong>{bmi:.1f}</strong> indicates obesity. "
                 f"Please consult a healthcare provider.", "danger")
 
-        # Charts
         components.section_header("📈", "Visual Analytics")
         ch1, ch2 = st.columns(2, gap="large")
 
@@ -795,7 +930,6 @@ else:
             components.chart_bmi_gauge(bmi)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # Build calorie breakdown from meal plan
         meal_cals = []
         for meal_name, meal_data in recommendations.get("meal_plan", {}).items():
             if isinstance(meal_data, pd.DataFrame) and "Calories (kcal)" in meal_data.columns:
@@ -824,7 +958,6 @@ else:
     with tabs[2]:
         components.section_header("🧬", "Disease Risk Predictions")
 
-        # Show if manual override is active
         if manual_override and manual_diseases:
             components.status_banner(
                 "🔧", "Manual Override Active",
@@ -836,88 +969,58 @@ else:
 
         pred_cols = st.columns(3, gap="large")
 
-        # ── Diabetes ─────────────────────────────────────────────────
         with pred_cols[0]:
-            # All UI values come from the RiskResult — no re-derivation
             _d_risk  = diabetes_risk
             _d_level = _d_risk.card_level        if _d_risk else "low"
             _d_badge = _d_risk.card_risk_text    if _d_risk else "Unknown"
             _d_prob  = _d_risk.model_probability if _d_risk else diabetes_confidence
             _d_fs    = _d_risk.final_status      if _d_risk else "Unknown"
-
             components.prediction_card(
                 icon="🩸", name="Diabetes",
                 pred_class=diabetes_label,
-                risk=_d_badge,
-                level=_d_level,
-                final_status=_d_fs,
-                model_probability=_d_prob,
+                risk=_d_badge, level=_d_level,
+                final_status=_d_fs, model_probability=_d_prob,
             )
             if _d_risk:
-                components.status_banner(
-                    "🩸", _d_risk.banner_title,
-                    _d_risk.banner_body,
-                    _d_risk.banner_level,
-                )
+                components.status_banner("🩸", _d_risk.banner_title, _d_risk.banner_body, _d_risk.banner_level)
             else:
-                components.status_banner("🩸", "Diabetes — No Data",
-                    "Run the analysis to see the diabetes prediction.", "info")
+                components.status_banner("🩸", "Diabetes — No Data", "Run the analysis to see the diabetes prediction.", "info")
 
-        # ── Obesity ──────────────────────────────────────────────────
         with pred_cols[1]:
             _o_risk  = obesity_risk
             _o_level = _o_risk.card_level        if _o_risk else "low"
             _o_badge = _o_risk.card_risk_text    if _o_risk else "Unknown"
             _o_prob  = _o_risk.model_probability if _o_risk else obesity_confidence
             _o_fs    = _o_risk.final_status      if _o_risk else "Unknown"
-
             components.prediction_card(
                 icon="⚖️", name="Obesity",
                 pred_class=obesity_label,
-                risk=_o_badge,
-                level=_o_level,
-                final_status=_o_fs,
-                model_probability=_o_prob,
+                risk=_o_badge, level=_o_level,
+                final_status=_o_fs, model_probability=_o_prob,
             )
             if _o_risk:
-                components.status_banner(
-                    "⚖️", _o_risk.banner_title,
-                    _o_risk.banner_body,
-                    _o_risk.banner_level,
-                )
+                components.status_banner("⚖️", _o_risk.banner_title, _o_risk.banner_body, _o_risk.banner_level)
             else:
-                components.status_banner("⚖️", "Obesity — No Data",
-                    "Run the analysis to see the obesity prediction.", "info")
+                components.status_banner("⚖️", "Obesity — No Data", "Run the analysis to see the obesity prediction.", "info")
 
-        # ── Kidney Disease ────────────────────────────────────────────
         with pred_cols[2]:
             _k_risk  = kidney_risk
             _k_level = _k_risk.card_level        if _k_risk else "low"
             _k_badge = _k_risk.card_risk_text    if _k_risk else "Unknown"
             _k_prob  = _k_risk.model_probability if _k_risk else kidney_confidence
             _k_fs    = _k_risk.final_status      if _k_risk else "Unknown"
-
             components.prediction_card(
                 icon="🫘", name="Kidney Disease",
                 pred_class=kidney_label,
-                risk=_k_badge,
-                level=_k_level,
-                final_status=_k_fs,
-                model_probability=_k_prob,
+                risk=_k_badge, level=_k_level,
+                final_status=_k_fs, model_probability=_k_prob,
             )
             if _k_risk:
-                components.status_banner(
-                    "🫘", _k_risk.banner_title,
-                    _k_risk.banner_body,
-                    _k_risk.banner_level,
-                )
+                components.status_banner("🫘", _k_risk.banner_title, _k_risk.banner_body, _k_risk.banner_level)
             else:
-                components.status_banner("🫘", "Kidney Disease — No Data",
-                    "Run the analysis to see the kidney disease prediction.", "info")
+                components.status_banner("🫘", "Kidney Disease — No Data", "Run the analysis to see the kidney disease prediction.", "info")
 
-        # ── Overall summary ───────────────────────────────────────────
         components.section_header("📋", "Overall Risk Summary")
-        # Count conditions with genuine clinical or model+clinical signal
         _flagged = [
             r for r in [diabetes_risk, obesity_risk, kidney_risk]
             if r is not None and r.final_status in ("High Risk", "Moderate Risk")
@@ -931,31 +1034,23 @@ else:
                 "No significant disease risk detected. Maintain your healthy lifestyle.", "ok")
         elif _flagged:
             _flagged_names = ", ".join(
-                n for n, r in [("Diabetes", diabetes_risk),
-                               ("Obesity",  obesity_risk),
-                               ("Kidney Disease", kidney_risk)]
+                n for n, r in [("Diabetes", diabetes_risk), ("Obesity", obesity_risk), ("Kidney Disease", kidney_risk)]
                 if r is not None and r.final_status in ("High Risk", "Moderate Risk")
             )
             components.status_banner("⚠️", "Elevated Risk Detected",
                 f"Identified: <strong>{_flagged_names}</strong>. "
-                "Personalised meal and nutrition recommendations are in the next tab.",
-                "warning")
+                "Personalised meal and nutrition recommendations are in the next tab.", "warning")
         else:
             _flag_names = ", ".join(
-                n for n, r in [("Diabetes", diabetes_risk),
-                               ("Obesity",  obesity_risk),
-                               ("Kidney Disease", kidney_risk)]
+                n for n, r in [("Diabetes", diabetes_risk), ("Obesity", obesity_risk), ("Kidney Disease", kidney_risk)]
                 if r is not None and r.final_status == "Model Flag"
             )
             components.status_banner("🔵", "Screening Flags — Clinical Markers Normal",
                 f"The model flagged: <strong>{_flag_names}</strong>. "
                 "All measured clinical markers are within normal reference ranges. "
-                "These are model screening signals, not confirmed diagnoses.",
-                "info")
+                "These are model screening signals, not confirmed diagnoses.", "info")
 
-        # ── XAI — Explainable AI section ──────────────────────────────
-        # Retrieve the exact medical params that were fed to the models,
-        # stored in session_state at analysis time for consistency.
+        # ── XAI ──────────────────────────────────────────────────────
         _xai_hba1c      = a.get("hba1c",      6.5)
         _xai_glucose    = a.get("glucose",     120.0)
         _xai_bp         = a.get("bp",          120)
@@ -965,107 +1060,63 @@ else:
 
         if XAI_AVAILABLE:
             components.section_header("🔬", "Explainable AI — Why These Predictions?")
-
-            # ── One full-width tab per disease ────────────────────────
-            # Using st.tabs() instead of st.columns() so each panel
-            # gets the full page width — fixes the expander arrow /
-            # label overlap that occurs inside narrow columns.
-            xai_tabs = st.tabs([
-                "🩸 Diabetes",
-                "⚖️ Obesity",
-                "🫘 Kidney Disease",
-            ])
+            xai_tabs = st.tabs(["🩸 Diabetes", "⚖️ Obesity", "🫘 Kidney Disease"])
 
             with xai_tabs[0]:
-                # Header row: prediction label + confidence chip
                 _conf_diab = (
-                    f"&nbsp;&nbsp;<span style='"
-                    f"background:#EFF6FF;color:#1E40AF;"
-                    f"border-radius:99px;padding:0.2rem 0.7rem;"
-                    f"font-size:0.8rem;font-weight:700;'>"
-                    f"Confidence: {diabetes_confidence}%</span>"
+                    f"&nbsp;&nbsp;<span class='xai-conf-chip'>Confidence:&nbsp;{diabetes_confidence}%</span>"
                     if diabetes_confidence is not None else ""
                 )
                 st.markdown(
-                    f"<div class='xai-tab-header'>"
-                    f"<span style='font-size:1.5rem;'>🩸</span>"
-                    f"<span>Diabetes &nbsp;—&nbsp; "
-                    f"<em>{diabetes_label}</em>{_conf_diab}</span>"
-                    f"</div>",
+                    f"<div class='xai-tab-header'><span style='font-size:1.4rem;'>🩸</span>"
+                    f"<span>Diabetes &nbsp;—&nbsp; <em>{diabetes_label}</em>{_conf_diab}</span></div>",
                     unsafe_allow_html=True,
                 )
-                _xai_diab = explain_diabetes(
-                    age=age, gender=gender, bmi=bmi,
-                    hba1c=_xai_hba1c, glucose=_xai_glucose,
-                    label=diabetes_label,
-                )
+                _xai_diab = explain_diabetes(age=age, gender=gender, bmi=bmi, hba1c=_xai_hba1c, glucose=_xai_glucose, label=diabetes_label)
                 components.xai_explanation_panel(_xai_diab, "Diabetes")
 
             with xai_tabs[1]:
                 _conf_ob = (
-                    f"&nbsp;&nbsp;<span style='"
-                    f"background:#FFFBEB;color:#92400E;"
-                    f"border-radius:99px;padding:0.2rem 0.7rem;"
-                    f"font-size:0.8rem;font-weight:700;'>"
-                    f"Confidence: {obesity_confidence}%</span>"
+                    f"&nbsp;&nbsp;<span class='xai-conf-chip'>Confidence:&nbsp;{obesity_confidence}%</span>"
                     if obesity_confidence is not None else ""
                 )
                 st.markdown(
-                    f"<div class='xai-tab-header'>"
-                    f"<span style='font-size:1.5rem;'>⚖️</span>"
-                    f"<span>Obesity &nbsp;—&nbsp; "
-                    f"<em>{obesity_label}</em>{_conf_ob}</span>"
-                    f"</div>",
+                    f"<div class='xai-tab-header'><span style='font-size:1.4rem;'>⚖️</span>"
+                    f"<span>Obesity &nbsp;—&nbsp; <em>{obesity_label}</em>{_conf_ob}</span></div>",
                     unsafe_allow_html=True,
                 )
-                _xai_ob = explain_obesity(
-                    age=age, gender=gender, bmi=bmi,
-                    label=obesity_label,
-                )
+                _xai_ob = explain_obesity(age=age, gender=gender, bmi=bmi, label=obesity_label)
                 components.xai_explanation_panel(_xai_ob, "Obesity")
 
             with xai_tabs[2]:
                 _conf_kid = (
-                    f"&nbsp;&nbsp;<span style='"
-                    f"background:#FFF1F2;color:#9F1239;"
-                    f"border-radius:99px;padding:0.2rem 0.7rem;"
-                    f"font-size:0.8rem;font-weight:700;'>"
-                    f"Confidence: {kidney_confidence}%</span>"
+                    f"&nbsp;&nbsp;<span class='xai-conf-chip'>Confidence:&nbsp;{kidney_confidence}%</span>"
                     if kidney_confidence is not None else ""
                 )
                 st.markdown(
-                    f"<div class='xai-tab-header'>"
-                    f"<span style='font-size:1.5rem;'>🫘</span>"
-                    f"<span>Kidney Disease &nbsp;—&nbsp; "
-                    f"<em>{kidney_label}</em>{_conf_kid}</span>"
-                    f"</div>",
+                    f"<div class='xai-tab-header'><span style='font-size:1.4rem;'>🫘</span>"
+                    f"<span>Kidney Disease &nbsp;—&nbsp; <em>{kidney_label}</em>{_conf_kid}</span></div>",
                     unsafe_allow_html=True,
                 )
                 _xai_kid = explain_kidney(
                     age=age, gender=gender, bmi=bmi,
                     sodium=_xai_sodium, potassium=_xai_potassium,
-                    bp=_xai_bp, creatinine=_xai_creatinine,
-                    label=kidney_label,
+                    bp=_xai_bp, creatinine=_xai_creatinine, label=kidney_label,
                 )
                 components.xai_explanation_panel(_xai_kid, "Kidney Disease")
         else:
-            st.info(
-                "ℹ️ Explainable AI module is not available. "
-                "Check that backend/xai.py is present and all models are loaded."
-            )
+            st.info("ℹ️ Explainable AI module is not available. Check that backend/xai.py is present and all models are loaded.")
 
     # ══════════════════════════════════════════════════════════════════
     #  TAB 3 — Recommendations
     # ══════════════════════════════════════════════════════════════════
     with tabs[3]:
 
-        # ── NCF AI recommendations ────────────────────────────────────
         if use_ncf and "ncf_recommendations" in st.session_state:
             components.section_header("🤖", "AI-Powered Recommendations (NCF)")
             components.status_banner(
                 "🤖", "Neural Collaborative Filtering Active",
-                st.session_state.get("ncf_explanation",
-                                     "Personalised recommendations from your profile."),
+                st.session_state.get("ncf_explanation", "Personalised recommendations from your profile."),
                 "info",
             )
             ncf_df = st.session_state.ncf_recommendations
@@ -1073,13 +1124,9 @@ else:
                 st.dataframe(ncf_df, use_container_width=True, hide_index=True)
             detected = st.session_state.get("ncf_diseases", [])
             if detected and detected != ["normal"]:
-                st.markdown(
-                    "**Detected conditions:** "
-                    + ", ".join(d.replace("_", " ").title() for d in detected)
-                )
+                st.markdown("**Detected conditions:** " + ", ".join(d.replace("_", " ").title() for d in detected))
             st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-        # ── Meal Plan ─────────────────────────────────────────────────
         components.section_header("🍽️", "Personalised Daily Meal Plan")
         meal_plan = recommendations.get("meal_plan", {})
         if meal_plan:
@@ -1088,10 +1135,7 @@ else:
                 if isinstance(meal_data, pd.DataFrame) and not meal_data.empty:
                     st.dataframe(meal_data, use_container_width=True, hide_index=True)
                 elif isinstance(meal_data, list) and meal_data:
-                    st.dataframe(
-                        pd.DataFrame(meal_data),
-                        use_container_width=True, hide_index=True,
-                    )
+                    st.dataframe(pd.DataFrame(meal_data), use_container_width=True, hide_index=True)
                 else:
                     st.info(f"No {meal_name.lower()} data available.")
         else:
@@ -1099,13 +1143,11 @@ else:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-        # ── Foods to Avoid ────────────────────────────────────────────
         components.section_header("🚫", "Foods to Avoid")
         avoid = recommendations.get("foods_to_avoid", [])
         if avoid:
             if isinstance(avoid[0], dict):
                 avoid_df = pd.DataFrame(avoid)
-                # Rename columns for cleaner display
                 avoid_df.columns = [c.title() for c in avoid_df.columns]
             else:
                 avoid_df = pd.DataFrame({"Food": avoid})
@@ -1116,24 +1158,18 @@ else:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-        # ── Macronutrient chart (shown when data available) ───────────
-        macro_data = (
-            recommendations.get("macronutrients")
-            or recommendations.get("macros")
-        )
+        macro_data = recommendations.get("macronutrients") or recommendations.get("macros")
         if macro_data:
             components.section_header("🥗", "Macronutrient Distribution")
             if isinstance(macro_data, dict):
                 macro_df = pd.DataFrame([
                     {"macro": k.replace("_g", "").capitalize(), "grams": v}
-                    for k, v in macro_data.items()
-                    if isinstance(v, (int, float))
+                    for k, v in macro_data.items() if isinstance(v, (int, float))
                 ])
             elif isinstance(macro_data, pd.DataFrame):
                 macro_df = macro_data
             else:
                 macro_df = pd.DataFrame()
-
             if not macro_df.empty:
                 st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
                 components.chart_macronutrient(macro_df)
@@ -1141,7 +1177,6 @@ else:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-        # ── Nutrition Tips ────────────────────────────────────────────
         components.section_header("💡", "Daily Nutrition Tips")
         tips = recommendations.get("nutrition_tips", [])
         if tips:
@@ -1151,27 +1186,23 @@ else:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-        # ── Export Report ─────────────────────────────────────────────
         components.section_header("📥", "Export Your Health Report")
         report_data = st.session_state.get("report_data")
         if report_data:
             d1, d2, d3 = st.columns(3)
             with d1:
-                components.download_button(
-                    report_data, filename="health_report", format="json"
-                )
+                components.download_button(report_data, filename="health_report", format="json")
             with d2:
                 try:
-                    components.download_button(
-                        report_data, filename="health_report", format="pdf"
-                    )
+                    components.download_button(report_data, filename="health_report", format="pdf")
                 except Exception as e:
                     st.error(f"PDF download error: {e}")
             with d3:
                 st.markdown(
-                    "<div style='padding:0.55rem 0;color:var(--c-muted);font-size:0.85rem;'>"
-                    "💾 Report auto-saved to local database.</div>",
+                    "<div class='report-saved-note'>💾&nbsp;Report auto-saved to local database.</div>",
                     unsafe_allow_html=True,
                 )
         else:
             st.info("Run an analysis first to enable report export.")
+
+components.page_footer()

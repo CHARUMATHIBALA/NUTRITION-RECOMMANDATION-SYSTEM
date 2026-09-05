@@ -3,15 +3,21 @@ from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-
+import config
 def _calculate_water_intake(weight_kg: float) -> float:
-    """Simple heuristic: 35 ml per kg of body weight."""
-    return round(weight_kg * 0.035, 2)
+    """Simple heuristic: factor per kg of body weight, capped at max intake."""
+    intake = weight_kg * config.WATER_INTAKE_FACTOR
+    # Apply maximum water intake ceiling (liters)
+    intake = min(intake, config.MAX_WATER_INTAKE_L)
+    return round(intake, 2)
 
 
 def _calculate_protein_requirement(weight_kg: float) -> float:
-    """Baseline protein: 0.8 g per kg of body weight."""
-    return round(weight_kg * 0.8, 2)
+    """Baseline protein: 0.8 g per kg of body weight, capped at max protein limit (e.g., kidney disease)."""
+    protein = weight_kg * config.PROTEIN_PER_KG.get("default", 0.8)
+    # Apply hard ceiling for protein intake (e.g., kidney disease limit)
+    protein = min(protein, config.KIDNEY_MAX_PROTEIN)
+    return round(protein, 2)
 
 
 def _macro_distribution(calories: float, protein_g: float) -> Dict[str, float]:
