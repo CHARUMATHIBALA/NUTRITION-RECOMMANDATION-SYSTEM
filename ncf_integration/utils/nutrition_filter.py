@@ -14,12 +14,12 @@ class NutritionFilter:
     Ensures recommended foods are safe for the user's health profile.
     """
     
-    def __init__(self, food_dataset_path='../food_dataset.csv'):
+    def __init__(self, food_dataset_path='food_dataset.csv'):
         """
         Initialize nutrition filter with food dataset.
         
         Args:
-            food_dataset_path: Path to the food dataset CSV file
+            food_dataset_path: Path to the food dataset CSV file (relative to project root)
         """
         self.food_df = None
         self.load_food_dataset(food_dataset_path)
@@ -69,61 +69,40 @@ class NutritionFilter:
         Load food dataset for filtering.
         
         Args:
-            food_dataset_path: Path to the food dataset
-        """
-        try:
-            import os
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            full_path = os.path.join(project_root, food_dataset_path)
+            food_dataset_path: Path to the food dataset (relative to project root)
             
-            if os.path.exists(full_path):
-                self.food_df = pd.read_csv(full_path)
-                print(f"Loaded {len(self.food_df)} food items for nutrition filtering")
-            else:
-                print(f"Food dataset not found at {full_path}")
-                self._create_synthetic_food_data()
+        Raises:
+            FileNotFoundError: If the food dataset file cannot be found
+            ValueError: If the food dataset cannot be loaded or is empty
+        """
+        import os
+        # Get project root (3 levels up from ncf_integration/utils/)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        # If food_dataset_path is relative, join with project root
+        if not os.path.isabs(food_dataset_path):
+            full_path = os.path.join(project_root, food_dataset_path)
+        else:
+            full_path = food_dataset_path
+        
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(
+                f"Food dataset not found at {full_path}. "
+                f"Please ensure the food_dataset.csv file exists in the project root directory."
+            )
+        
+        try:
+            self.food_df = pd.read_csv(full_path)
+            if self.food_df.empty:
+                raise ValueError(
+                    f"Food dataset loaded but is empty. Path: {full_path}"
+                )
+            print(f"Loaded {len(self.food_df)} food items for nutrition filtering")
         except Exception as e:
-            print(f"Error loading food dataset: {e}")
-            self._create_synthetic_food_data()
-    
-    def _create_synthetic_food_data(self):
-        """
-        Create synthetic food data if dataset is not available.
-        """
-        print("Creating synthetic food data for nutrition filtering...")
-        
-        foods = []
-        food_names = [
-            'Roti', 'Dal', 'Rice', 'Vegetable Curry', 'Chicken Curry',
-            'Fish Curry', 'Sambar', 'Idli', 'Dosa', 'Upma',
-            'Poha', 'Paratha', 'Paneer Tikka', 'Mixed Veg', 'Dal Makhani',
-            'Biryani', 'Pulao', 'Khichdi', 'Salad', 'Soup',
-            'Oats', 'Yogurt', 'Fruits', 'Nuts', 'Sprouts'
-        ]
-        
-        meal_types = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
-        
-        for i, name in enumerate(food_names):
-            foods.append({
-                'food_id': i,
-                'food_name': name,
-                'calories': np.random.randint(50, 500),
-                'protein': np.random.uniform(1, 30),
-                'carbs': np.random.uniform(5, 80),
-                'fats': np.random.uniform(1, 25),
-                'fiber': np.random.uniform(0, 15),
-                'sugar': np.random.uniform(0, 20),
-                'sodium': np.random.uniform(10, 500),
-                'potassium': np.random.uniform(50, 400),
-                'MealType': np.random.choice(meal_types),
-                'is_vegetarian': np.random.choice([0, 1], p=[0.3, 0.7]),
-                'diabetes_friendly': np.random.choice([0, 1], p=[0.3, 0.7]),
-                'kidney_friendly': np.random.choice([0, 1], p=[0.4, 0.6]),
-                'obesity_friendly': np.random.choice([0, 1], p=[0.3, 0.7])
-            })
-        
-        self.food_df = pd.DataFrame(foods)
-        print(f"Created {len(self.food_df)} synthetic food items")
+            raise ValueError(
+                f"Error loading food dataset from {full_path}: {e}. "
+                f"Please ensure the file is a valid CSV with the correct format."
+            )
     
     def filter_by_disease(self, disease: str, food_ids: List[int] = None) -> List[int]:
         """

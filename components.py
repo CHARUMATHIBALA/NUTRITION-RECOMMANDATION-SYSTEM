@@ -59,10 +59,16 @@ def hero_banner(
     username: str = "",
 ):
     """Gradient header banner shown at the top of every page."""
-    chip = (
-        f"<span class='hero-user'>&#128100;&nbsp;{username}</span>"
-        if username else ""
-    )
+    if username:
+        _initial = username.strip()[0].upper() if username.strip() else "U"
+        chip = (
+            f"<div class='hero-profile-chip' title='Signed in as {username}'>"
+            f"<div class='hpc-avatar'>{_initial}</div>"
+            f"<span class='hpc-name'>{username}</span>"
+            f"</div>"
+        )
+    else:
+        chip = ""
     st.markdown(
         f"<div class='hero-banner'>"
         f"<div class='hero-ring'></div>"
@@ -962,3 +968,58 @@ def xai_explanation_panel(xai_result, disease_name: str = "") -> None:
         "</div>",
         unsafe_allow_html=True,
     )
+
+
+def food_item_card(food_name: str, calories: float, protein: float = None,
+                   carbs: float = None, fat: float = None, fiber: float = None,
+                   meal_type: str = "", food_index: int = 0, show_swap: bool = False):
+    """Render a food item card with nutrition info.
+    
+    Parameters
+    ----------
+    food_name : str
+        Name of the food item.
+    calories : float
+        Calorie content in kcal.
+    protein : float, optional
+        Protein content in grams.
+    carbs : float, optional
+        Carbohydrate content in grams.
+    fat : float, optional
+        Fat content in grams.
+    fiber : float, optional
+        Fiber content in grams.
+    meal_type : str
+        Type of meal (e.g., 'Breakfast', 'Lunch').
+    food_index : int
+        Index of the food item in the meal list.
+    show_swap : bool
+        Whether to show swap button.
+    """
+    # Use Streamlit's native components for better rendering
+    col_name, col_cal, col_swap = st.columns([3, 1, 1])
+    with col_name:
+        st.markdown(f"**{food_name}**")
+    with col_cal:
+        st.markdown(f"<span style='color: #2563EB; font-weight: 500;'>{calories:.0f} kcal</span>", unsafe_allow_html=True)
+    with col_swap:
+        if show_swap:
+            button_key = f"swap_{meal_type}_{food_index}_{food_name.replace(' ', '_')}"
+            if st.button("🔄 Swap", key=button_key, help="Find alternative food"):
+                return True
+    
+    # Show nutrition info if available
+    nutrition_info = []
+    if protein is not None and protein > 0:
+        nutrition_info.append(f"🥩 {protein:.1f}g")
+    if carbs is not None and carbs > 0:
+        nutrition_info.append(f"🍞 {carbs:.1f}g")
+    if fat is not None and fat > 0:
+        nutrition_info.append(f"🥑 {fat:.1f}g")
+    if fiber is not None and fiber > 0:
+        nutrition_info.append(f"🌾 {fiber:.1f}g")
+    
+    if nutrition_info:
+        st.markdown(f"<small style='color: #64748B;'>{' • '.join(nutrition_info)}</small>", unsafe_allow_html=True)
+    
+    return False

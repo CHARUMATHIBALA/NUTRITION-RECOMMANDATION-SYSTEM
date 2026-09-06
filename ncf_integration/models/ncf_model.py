@@ -163,7 +163,7 @@ class NCFModel:
         mlp_item_emb = layers.Flatten()(mlp_item_emb)
         
         # GMF path: element-wise product
-        gmf_vector = layers.multiply([gmf_user_emb, glp_item_emb])
+        gmf_vector = layers.multiply([gmf_user_emb, gmf_item_emb])
         
         # MLP path: concatenation through hidden layers
         mlp_vector = layers.concatenate([mlp_user_emb, mlp_item_emb])
@@ -340,16 +340,27 @@ class NCFModel:
     def load_model(self, filepath):
         """
         Load a trained model from disk.
-        
+
         Args:
-            filepath: Path to the saved model
+            filepath: Path to the saved model (.keras format)
         """
-        self.model = keras.models.load_model(filepath)
+        self.model = keras.models.load_model(filepath, compile=False)
         print(f"Model loaded from {filepath}")
-        
-        # Update dimensions from loaded model
-        self.num_users = self.model.get_layer('user_embedding').input_dim
-        self.num_items = self.model.get_layer('item_embedding').input_dim
+
+        # Update dimensions from the embedding layer config.
+        # Keras Embedding layers store input_dim in get_config(), not as an
+        # attribute named input_dim on the layer object in newer TF versions.
+        try:
+            user_emb_layer = self.model.get_layer('user_embedding')
+            item_emb_layer = self.model.get_layer('item_embedding')
+            self.num_users = user_emb_layer.get_config().get(
+                'input_dim', user_emb_layer.input_dim
+            )
+            self.num_items = item_emb_layer.get_config().get(
+                'input_dim', item_emb_layer.input_dim
+            )
+        except Exception as e:
+            print(f"Warning: could not auto-detect model dimensions: {e}")
     
     def get_model_summary(self):
         """

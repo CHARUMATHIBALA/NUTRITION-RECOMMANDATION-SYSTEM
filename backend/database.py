@@ -4,8 +4,31 @@
 Provides a simple connection, table creation, and CRUD helpers for:
 - users (id, username, name, password_hash)
 - analysis_history (id, user_id, timestamp, patient_name, data JSON)
+- food_interactions (id, user_id, food_id, interaction_type, timestamp)
 
 The module lazily creates tables on first import.
+
+food_interactions schema
+------------------------
+user_id          TEXT    — application username (from streamlit-authenticator)
+food_id          INTEGER — references food_dataset.csv food_id (1-indexed, 1–1014)
+interaction_type TEXT    — one of: 'selected', 'swapped_away', 'swapped_to'
+                           'selected'     : food appeared in the final meal plan
+                                            the user ran the analysis for
+                           'swapped_to'   : user actively chose this food via the
+                                            swap UI (positive signal)
+                           'swapped_away' : user replaced this food via the swap UI
+                                            (negative/neutral signal)
+timestamp        TEXT    — ISO-8601 UTC datetime
+
+What constitutes a positive interaction
+----------------------------------------
+Only 'selected' and 'swapped_to' are genuine positive signals — the user
+explicitly accepted or chose that food.  'swapped_away' is a weak negative.
+
+These interactions drive NCF training once sufficient data has accumulated.
+See backend/services/interaction_service.py for the recording API.
+See backend/services/ncf_service.py for the training gate (MIN_INTERACTIONS).
 """
 
 import sqlite3
@@ -49,6 +72,32 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
         """
+    )
+    # ── Food interactions (for NCF training) ─────────────────────────
+    # user_id is the application username string (from streamlit-authenticator).
+    # food_id references food_dataset.csv (1-indexed, 1–1014).
+    # interaction_type: 'selected' | 'swapped_to' | 'swapped_away'
+    # A unique constraint prevents duplicate (user, food, type) rows on the
+    # same UTC day; duplicate inserts are silently ignored via INSERT OR IGNORE.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS food_interactions (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id          TEXT    NOT NULL,
+            food_id          INTEGER NOT NULL,
+            interaction_type TEXT    NOT NULL CHECK(
+                                interaction_type IN ('selected','swapped_to','swapped_away')
+                             ),
+            timestamp        TEXT    NOT NULL
+        )
+        """
+    )
+    # Index for fast lookup by user and by food
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fi_user ON food_interactions(user_id)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fi_food ON food_interactions(food_id)"
     )
     conn.commit()
     conn.close()

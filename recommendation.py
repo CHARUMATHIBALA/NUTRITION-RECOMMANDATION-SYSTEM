@@ -427,3 +427,74 @@ class IntelligentNutritionRecommender:
             tips.append("Focus on nutrient density over calorie density")
             
         return tips[:config.MAX_TIPS]  # Return top configured tips
+    
+    def get_alternative_foods(self, diseases, meal_type: Optional[str] = None, 
+                             current_food: Optional[str] = None, top_n: int = 5) -> pd.DataFrame:
+        """Get alternative foods for swapping, respecting disease restrictions.
+        
+        Args:
+            diseases: List of predicted diseases or a single disease string.
+            meal_type: Optional meal type filter (e.g., 'Breakfast', 'Lunch').
+            current_food: Name of the current food to exclude from alternatives.
+            top_n: Number of alternative foods to return.
+            
+        Returns:
+            pandas.DataFrame with alternative foods and nutritional info.
+        """
+        if isinstance(diseases, str):
+            diseases = [diseases]
+        
+        # Get disease conditions
+        conditions = self._get_disease_conditions(diseases)
+        
+        # Apply disease filters
+        filtered_df = self._apply_disease_filters(conditions)
+        
+        # Filter by meal type
+        if meal_type:
+            meal_lower = meal_type.lower()
+            filtered_df = filtered_df[
+                filtered_df["MealType"].str.lower().str.contains(meal_lower, na=False)
+            ]
+        
+        # Exclude current food if specified
+        if current_food:
+            filtered_df = filtered_df[
+                ~filtered_df["Dish Name"].str.lower().str.contains(current_food.lower(), na=False)
+            ]
+        
+        # Calculate nutritional scores
+        filtered_df['nutritional_score'] = filtered_df.apply(
+            lambda row: self._calculate_nutritional_score(row, conditions), axis=1
+        )
+        
+        # Sort by nutritional score (descending)
+        filtered_df = filtered_df.sort_values('nutritional_score', ascending=False)
+        
+        # Get top alternatives
+        alternatives = filtered_df.head(top_n).copy()
+        
+        # Add nutritional benefits and reasons
+        alternatives['Nutritional Benefits'] = alternatives.apply(
+            lambda row: self._get_nutritional_benefits(row), axis=1
+        )
+        alternatives['Reason for Recommendation'] = alternatives.apply(
+            lambda row: self._get_recommendation_reason(row, conditions), axis=1
+        )
+        
+        # Select and order columns
+        result_columns = [
+            "Dish Name",
+            "Calories (kcal)",
+            "Protein (g)",
+            "Carbohydrates (g)",
+            "Fats (g)",
+            "Fibre (g)",
+            "Nutritional Benefits",
+            "Reason for Recommendation"
+        ]
+        
+        # Only include columns that exist in the dataframe
+        available_columns = [col for col in result_columns if col in alternatives.columns]
+        
+        return alternatives[available_columns]

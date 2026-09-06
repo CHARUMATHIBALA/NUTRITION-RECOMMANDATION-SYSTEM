@@ -32,15 +32,62 @@ PROTEIN_PER_KG = {
     "diabetes": 1.0,
 }
 
-# ── NCF hybrid scoring weights ──────────────────────────────────────────────
-# These three weights must sum to 1.0.
-# NCF_SCORE_WEIGHT applies only when the trained NCF model is loaded;
-# when falling back, NCF_SCORE_WEIGHT is treated as 0 and the remaining
-# weight is redistributed to SUITABILITY_SCORE_WEIGHT so the maths still
-# sums to 1.  See HybridRecommender._compute_hybrid_score() for usage.
-SUITABILITY_SCORE_WEIGHT: float = 0.60   # nutrition-suitability component
-CONTENT_SCORE_WEIGHT:     float = 0.20   # content-based component (rating normalised)
-NCF_SCORE_WEIGHT:         float = 0.20   # NCF predicted-rating component
+# ── Hybrid scoring weights ──────────────────────────────────────────────────
+# These three weights define the target distribution when ALL components are
+# available.  They MUST be numeric, non-negative, and sum to 1.0.
+#
+# NCF_SCORE_WEIGHT is applied ONLY when a trained NCF model is confirmed
+# available at runtime.  When NCF is unavailable the two available weights
+# are re-normalised dynamically so they still sum to 1.0:
+#
+#   effective_nutrition_w = NUTRITION_SCORE_WEIGHT
+#                           / (NUTRITION_SCORE_WEIGHT + CONTENT_SCORE_WEIGHT)
+#   effective_content_w   = CONTENT_SCORE_WEIGHT
+#                           / (NUTRITION_SCORE_WEIGHT + CONTENT_SCORE_WEIGHT)
+#
+# Implemented in EnhancedNutritionRecommender._calculate_hybrid_score().
+NUTRITION_SCORE_WEIGHT: float = 0.50   # nutrition-suitability component
+CONTENT_SCORE_WEIGHT:   float = 0.30   # content-based (goal / nutritional profile fit)
+NCF_SCORE_WEIGHT:       float = 0.20   # NCF predicted-rating (only when model trained)
+
+# Legacy alias kept for backward-compatibility — do not use in new code.
+SUITABILITY_SCORE_WEIGHT: float = NUTRITION_SCORE_WEIGHT
+
+# ── Weight validation ────────────────────────────────────────────────────────
+def _validate_hybrid_weights() -> None:
+    """Raise ValueError if any hybrid weight is invalid."""
+    weights = {
+        "NUTRITION_SCORE_WEIGHT": NUTRITION_SCORE_WEIGHT,
+        "CONTENT_SCORE_WEIGHT":   CONTENT_SCORE_WEIGHT,
+        "NCF_SCORE_WEIGHT":       NCF_SCORE_WEIGHT,
+    }
+    for name, value in weights.items():
+        if not isinstance(value, (int, float)):
+            raise ValueError(f"config.{name} must be numeric, got {type(value)}")
+        if value < 0:
+            raise ValueError(f"config.{name} must be non-negative, got {value}")
+    total = NUTRITION_SCORE_WEIGHT + CONTENT_SCORE_WEIGHT + NCF_SCORE_WEIGHT
+    if abs(total - 1.0) > 1e-9:
+        raise ValueError(
+            f"Hybrid weights must sum to 1.0, got {total:.6f} "
+            f"(NUTRITION={NUTRITION_SCORE_WEIGHT}, CONTENT={CONTENT_SCORE_WEIGHT}, "
+            f"NCF={NCF_SCORE_WEIGHT})"
+        )
+
+_validate_hybrid_weights()
+
+# ── Disease severity defaults ────────────────────────────────────────────────
+# Used by the severity pipeline when severity cannot be determined from
+# RiskResult.final_status (e.g. the value is None or unrecognised).
+# Must be one of: "mild" | "moderate" | "severe"
+# See backend/services/severity_rules.py for full severity rules.
+SEVERITY_DEFAULT: str = "moderate"
+
+# Minimum number of candidate foods that must remain after severity-based
+# hard filtering.  If the pool drops below this, soft constraints are
+# progressively relaxed (hard constraints are NEVER relaxed).
+# See EnhancedNutritionRecommender._apply_severity_filters().
+SEVERITY_MIN_POOL_SIZE: int = 30
 
 # UI mappings (example placeholders)
 LEVEL_CSS_CLASS = {
