@@ -12,9 +12,13 @@ enableCORS = false
 enableXsrfProtection = false
 
 [theme]
-# Professional Blue & White Healthcare Theme
-primaryColor = "#2563EB"
-backgroundColor = "#F1F5F9"
+# Premium Blue & White Healthcare Theme — matches assets/style.css
+# Primary blue (#1A56DB) used for buttons, accents and interactive elements
+primaryColor = "#1A56DB"
+# Page background — same as --c-bg CSS variable
+backgroundColor = "#F4F7FF"
+# Card/surface background — same as --c-surface CSS variable
 secondaryBackgroundColor = "#FFFFFF"
+# Primary text colour — same as --c-text CSS variable
 textColor = "#0F172A"
 font = "sans serif"

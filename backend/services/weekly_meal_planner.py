@@ -601,26 +601,73 @@ class WeeklyMealPlanner:
                 duplicate_meals = True
         checks['no_duplicate_meal_combinations'] = not duplicate_meals
         if duplicate_meals:
-            warnings.append(
-                "The same meal combination appears on more than one day "
-                "(allowed only when the safe candidate pool is too small)"
+            # Only warn if the pool is large enough that combos should be unique.
+            # When per-slot pools are small (Lunch/Dinner < 14 unique foods),
+            # combo repetition is expected and should not surface as a warning.
+            _mt_lower_check = (
+                filtered_df['MealType'].str.lower().str.strip()
+                if filtered_df is not None and not filtered_df.empty and 'MealType' in filtered_df.columns
+                else None
             )
+            _lunch_sz  = int(_mt_lower_check.str.match(r'^lunch$|^lunch/dinner$', na=False).sum()) if _mt_lower_check is not None else 999
+            _dinner_sz = int(_mt_lower_check.str.match(r'^dinner$|^lunch/dinner$', na=False).sum()) if _mt_lower_check is not None else 999
+            if _lunch_sz >= 14 and _dinner_sz >= 14:
+                warnings.append(
+                    "The same meal combination appears on more than one day "
+                    "(allowed only when the safe candidate pool is too small)"
+                )
 
         max_rep = diversity_metrics.get('max_repetition_count', 0)
         over_cap = [name for name, c in food_counts.items() if c > self.MAX_FOOD_USES]
         safe_pool_size = len(filtered_df) if filtered_df is not None else 0
+
+        # ── Per-slot pool adequacy check ──────────────────────────────
+        # The 7-day plan needs:
+        #   Breakfast : 1 food/day × 7 = 7 unique slots
+        #   Lunch     : 2 foods/day × 7 = 14 unique slots  (uses Lunch + Lunch/Dinner)
+        #   Snack     : 1 food/day × 7 = 7 unique slots
+        #   Dinner    : 2 foods/day × 7 = 14 unique slots  (uses Dinner + Lunch/Dinner)
+        # Total = 42 slots, but uniqueness must hold PER SLOT, not across the whole pool.
+        # A total pool of 100+ is still insufficient if Dinner-only + Lunch/Dinner < 14.
+        # Compute per-slot pools from filtered_df when available.
+        per_slot_pools: Dict[str, int] = {}
+        if filtered_df is not None and not filtered_df.empty and 'MealType' in filtered_df.columns:
+            mt_lower = filtered_df['MealType'].str.lower().str.strip()
+            per_slot_pools['breakfast'] = int((mt_lower == 'breakfast').sum())
+            per_slot_pools['lunch']     = int(mt_lower.str.match(r'^lunch$|^lunch/dinner$', na=False).sum())
+            per_slot_pools['snack']     = int((mt_lower == 'snack').sum())
+            per_slot_pools['dinner']    = int(mt_lower.str.match(r'^dinner$|^lunch/dinner$', na=False).sum())
+
+        slot_needs = {'breakfast': 7, 'lunch': 14, 'snack': 7, 'dinner': 14}
+        constrained_slots = [
+            slot for slot, needed in slot_needs.items()
+            if per_slot_pools.get(slot, needed + 1) < needed
+        ]
+        pool_too_small_for_uniqueness = bool(constrained_slots) or safe_pool_size < 42
+
         checks['no_excessive_food_repetition'] = (
-            max_rep <= self.MAX_FOOD_USES or safe_pool_size < 42
+            max_rep <= self.MAX_FOOD_USES or pool_too_small_for_uniqueness
         )
-        if over_cap and safe_pool_size >= 42:
+        if over_cap and not pool_too_small_for_uniqueness:
             warnings.append(
                 f"Foods used more than {self.MAX_FOOD_USES} times: {over_cap[:8]}"
             )
-        elif over_cap:
-            warnings.append(
-                f"Controlled repetition used because the safe pool has "
-                f"{safe_pool_size} foods: {over_cap[:8]}"
-            )
+        elif over_cap and pool_too_small_for_uniqueness:
+            if constrained_slots:
+                slot_info = ", ".join(
+                    f"{s}={per_slot_pools.get(s, '?')}"
+                    for s in constrained_slots
+                )
+                warnings.append(
+                    f"Controlled repetition used: per-slot pools are small "
+                    f"({slot_info} available, need 14/7). "
+                    f"Repeated: {over_cap[:8]}"
+                )
+            else:
+                warnings.append(
+                    f"Controlled repetition used because the safe pool has "
+                    f"{safe_pool_size} foods: {over_cap[:8]}"
+                )
 
         checks['deterministic_selection'] = True
 

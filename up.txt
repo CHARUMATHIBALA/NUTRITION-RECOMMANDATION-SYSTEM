@@ -1,0 +1,77 @@
+UNICODE / TEXT RENDERING CORRUPTION — DIAGNOSIS REPORT
+=======================================================
+
+SYMPTOM
+-------
+Every st.expander label in the Nutrition & Meal Recommendations section
+displays as "_arr▯vDaig▯t" (garbled) instead of "📅 Day 1", "📅 Day 2", etc.
+
+ROOT CAUSE
+----------
+CSS over-ride breaks the Material Symbols icon font on the expander header.
+
+Streamlit 1.59.x renders the expand/collapse toggle inside st.expander() as
+a <span> (or inline element) that uses the "Material Symbols" font.
+That font uses Unicode LIGATURES — it maps the text string "arrow_drop_down"
+or "expand_more" to a single rendered icon glyph.
+
+Two CSS rules in assets/style.css override the font-family on the entire
+<summary> element AND every child span:
+
+  Rule 1 (line 1250, Section 22):
+    .stExpander summary {
+      font-family: var(--font) !important;   ← forces Inter onto summary
+    }
+
+  Rule 2 (lines ~200-203, Section 4):
+    p, li, div, span, label {
+      font-family: var(--font) !important;   ← forces Inter onto ALL spans
+    }
+
+Because the icon span inherits Inter (not Material Symbols), the ligature
+string (e.g. "arrow_drop_down") renders as plain Inter text. Combined with
+the 4-byte emoji 📅 (U+1F4C5) that Streamlit may process into an icon
+shortcode, the visual result is the garbled "_arr▯vDaig▯t" seen on screen.
+
+AFFECTED FILE
+-------------
+  d:\Healthcare_Project\assets\style.css
+    - Line 1250: .stExpander summary { font-family: var(--font) !important; }
+    - Lines ~200-203: p, li, div, span, label { font-family: var(--font) !important; }
+
+AFFECTED VARIABLE / FUNCTION
+-----------------------------
+  app.py line 2057:
+    with st.expander(f"📅 {day_name}", expanded=(day_number == 1)):
+  The label itself is clean ASCII + emoji. The corruption is purely visual
+  (CSS font override on the rendered Streamlit component).
+
+DATA ENCODING NOTE (secondary, not the expander issue)
+-------------------------------------------------------
+  food_dataset.csv has 3 food names with mojibake (double-encoded UTF-8):
+    - "...Â\xa0ke..." (U+00C2 + U+00A0) should be " ke " (space)
+  These 3 rows are also fixed by the clean_display_text() helper below.
+
+PROPOSED MINIMAL FIX
+---------------------
+1. In assets/style.css:
+   a. Remove font-family from .stExpander summary (keep all other properties)
+   b. Add an explicit EXCEPTION to the global span/div rule to exclude
+      Streamlit's Material icon spans from the font override.
+
+2. In recommendation.py (or wherever food names are prepared for display):
+   Add a clean_display_text() helper that strips mojibake artifacts from
+   food names without touching emojis or legitimate Unicode.
+
+3. Change the expander label from f"📅 {day_name}" to f"📆 {day_name}" OR
+   use plain text "Day 1", "Day 2" without an emoji prefix, to completely
+   avoid the emoji-to-icon-ligature conversion in Streamlit.
+
+VERIFICATION STEPS
+------------------
+After fix:
+  - Expanders show "📅 Day 1" ... "📅 Day 7" (or plain "Day 1" ... "Day 7")
+  - No "_arr▯vDaig▯t" garbling
+  - No ╡ or replacement chars in food names
+  - Emojis in meal tags (🍽️ 🔥 💪 🥗) still render correctly
+  - 7-day recommendations, diversity metrics, scores unchanged

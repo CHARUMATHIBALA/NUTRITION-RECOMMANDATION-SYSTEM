@@ -90,7 +90,7 @@ if auth_status is not True:
         <script>document.documentElement.classList.add('login-view');</script>
         <style>
           body, .stApp, section.main {
-            background: linear-gradient(135deg, #EFF6FF 0%, #F0F9FF 55%, #F8FAFC 100%) !important;
+            background: linear-gradient(135deg, #EBF0FF 0%, #F4F7FF 55%, #F0F9FF 100%) !important;
             min-height: 100vh !important;
           }
         </style>
@@ -116,9 +116,10 @@ _display_name = name or username or "User"
 
 with st.sidebar:
     components.sidebar_user_chip(_display_name)
-    st.markdown("<hr style='margin:0.4rem 0;'/>", unsafe_allow_html=True)
+    st.markdown("<hr style='border:none;border-top:1px solid var(--c-border);margin:0.5rem 0;'/>", unsafe_allow_html=True)
 
-    st.subheader("Appearance")
+    # Appearance section — styled h3 picks up the sidebar CSS
+    st.markdown("### Appearance", unsafe_allow_html=False)
     dark_mode = st.checkbox(
         "🌙 Dark Mode",
         value=st.session_state.get("theme", "light") == "dark",
@@ -126,8 +127,9 @@ with st.sidebar:
     )
     st.session_state.theme = "dark" if dark_mode else "light"
 
-    st.markdown("<hr style='margin:0.4rem 0;'/>", unsafe_allow_html=True)
+    st.markdown("<hr style='border:none;border-top:1px solid var(--c-border);margin:0.5rem 0;'/>", unsafe_allow_html=True)
 
+    st.markdown("### Actions", unsafe_allow_html=False)
     if st.button("♻️ Reset Results", use_container_width=True, key="sidebar_reset"):
         keep = {"theme", "authenticator", "authentication_status", "name", "username"}
         for key in list(st.session_state.keys()):
@@ -138,6 +140,16 @@ with st.sidebar:
     if st.button("🚪 Logout", use_container_width=True, key="sidebar_logout"):
         logout()
         st.rerun()
+
+    # Branding footer at bottom of sidebar
+    st.markdown(
+        "<div style='margin-top:auto;padding-top:1.5rem;'>"
+        "<p style='font-size:0.68rem;color:var(--c-muted);text-align:center;"
+        "line-height:1.5;'>Smart Health Dashboard<br>"
+        "<span style='color:var(--c-primary);font-weight:700;'>Healthcare AI</span></p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 # ════════════════════════════════════════════════════════════════════
 #  Re-apply theme (sidebar may have just changed it)
@@ -328,6 +340,35 @@ def _get_bmi_range_info(bmi):
         }
 
 
+def clean_display_text(value) -> str:
+    """Sanitise a food name or label for safe display in the UI.
+
+    Removes mojibake artifacts that arise from double-encoded UTF-8
+    (UTF-8 bytes misread as Latin-1 then re-encoded) without touching
+    legitimate Unicode characters or emojis.
+
+    Specifically fixes:
+      Â\u00a0  (mojibake for non-breaking space U+00A0)
+      Â        (orphaned mojibake prefix byte)
+      \u00a0   (lone non-breaking space → plain space)
+    Returns the cleaned string, stripped of leading/trailing whitespace.
+    """
+    import re as _re
+    if value is None:
+        return ""
+    text = str(value)
+    # Remove mojibake non-breaking-space sequences (Â + nbsp)
+    text = text.replace("Â\u00a0", " ")
+    text = text.replace("Â ", " ")
+    # Remove any remaining lone Â (orphaned Latin-1 mojibake artifact)
+    text = text.replace("Â", "")
+    # Replace any remaining non-breaking spaces with regular spaces
+    text = text.replace("\u00a0", " ")
+    # Collapse runs of spaces introduced by the replacements above
+    text = _re.sub(r"  +", " ", text)
+    return text.strip()
+
+
 def _generate_meal_explanation(food_items: list, diseases: list) -> str:
     """Generate explanation for a balanced meal."""
     if not food_items:
@@ -381,49 +422,46 @@ def _display_balanced_meal(food_items: list, meal_name: str, diseases: list, dai
     # Generate meal explanation
     explanation = _generate_meal_explanation(food_items, diseases)
     
-    # Display meal as a combined card
+    # Meal summary header card — uses design-system tokens via CSS variables
+    dish_names = " + ".join(
+        item.get("Dish Name", "Unknown")
+        for item in food_items[:3]
+        if isinstance(item, dict)
+    )
     st.markdown(
-        f"""
-        <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 1rem; margin-bottom: 1rem;'>
-            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;'>
-                <span style='font-size: 1.1rem; font-weight: 600; color: #0F172A;'>
-                    {' + '.join([item.get('Dish Name', 'Unknown') for item in food_items[:3] if isinstance(item, dict)])}
-                </span>
-                <span style='color: #2563EB; font-weight: 500; background: #EFF6FF; padding: 0.3rem 0.6rem; border-radius: 6px;'>
-                    ~{total_calories:.0f} kcal
-                </span>
-            </div>
-            <div style='color: #64748B; font-size: 0.9rem; margin-bottom: 0.75rem;'>
-                <strong>Why:</strong> {explanation}
-            </div>
-        </div>
-        """,
+        f"<div style='background:var(--c-surface2);border:1px solid var(--c-border);"
+        f"border-left:4px solid var(--c-primary);border-radius:var(--r-lg);"
+        f"padding:0.85rem 1.1rem;margin-bottom:0.75rem;'>"
+        f"  <div style='display:flex;justify-content:space-between;align-items:flex-start;"
+        f"gap:0.5rem;flex-wrap:wrap;margin-bottom:0.4rem;'>"
+        f"    <span style='font-size:0.98rem;font-weight:700;color:var(--c-text);"
+        f"min-width:0;word-break:break-word;'>{dish_names}</span>"
+        f"    <span style='font-size:0.82rem;font-weight:700;color:var(--c-primary);"
+        f"background:var(--c-primary-light);border:1px solid var(--c-primary-mid);"
+        f"padding:0.2rem 0.55rem;border-radius:6px;white-space:nowrap;'>"
+        f"~{total_calories:.0f} kcal</span>"
+        f"  </div>"
+        f"  <div style='font-size:0.82rem;color:var(--c-muted);line-height:1.5;"
+        f"word-break:break-word;'>"
+        f"    <strong style='color:var(--c-subtle);'>Why:</strong> {explanation}"
+        f"  </div>"
+        f"</div>",
         unsafe_allow_html=True,
     )
-    
-    # Display individual food items with nutrition
+
+    # Individual food item cards
     for idx, food_item in enumerate(food_items):
         if isinstance(food_item, dict):
-            food_name = food_item.get("Dish Name", "Unknown Food")
-            calories = food_item.get("Calories (kcal)", food_item.get("Calories", food_item.get("calories", 0)))
-            protein = food_item.get("Protein (g)", food_item.get("Protein", food_item.get("protein", None)))
-            carbs = food_item.get("Carbohydrates (g)", food_item.get("Carbohydrates", food_item.get("carbs", None)))
-            fat = food_item.get("Fats (g)", food_item.get("Fats", food_item.get("fat", None)))
-            fiber = food_item.get("Fibre (g)", food_item.get("Fibre", food_item.get("fiber", None)))
-            
-            # Display food item card
             components.food_item_card(
-                food_name=food_name,
-                calories=calories,
-                protein=protein,
-                carbs=carbs,
-                fat=fat,
-                fiber=fiber,
+                food_name=food_item.get("Dish Name", "Unknown Food"),
+                calories=food_item.get("Calories (kcal)", food_item.get("Calories", food_item.get("calories", 0))),
+                protein=food_item.get("Protein (g)", food_item.get("Protein", food_item.get("protein", None))),
+                carbs=food_item.get("Carbohydrates (g)", food_item.get("Carbohydrates", food_item.get("carbs", None))),
+                fat=food_item.get("Fats (g)", food_item.get("Fats", food_item.get("fat", None))),
+                fiber=food_item.get("Fibre (g)", food_item.get("Fibre", food_item.get("fiber", None))),
                 meal_type=meal_name,
-                food_index=idx
+                food_index=idx,
             )
-            
-            st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
 
 
 def _get_parameter_range_info(param_name, value):
@@ -784,51 +822,52 @@ if _show_form:
                 with metrics_col1:
                     # Determine BMI category class for color coding
                     bmi_class = f"bmi-{bmi_cat.lower().replace(' ', '-')}"
-                    
+
                     # Get BMI healthy range information
                     bmi_range_info = _get_bmi_range_info(calculated_bmi)
-                    
+                    _bmi_status_cls = bmi_range_info['status_class']
+                    _bmi_status_txt = bmi_range_info['status']
+                    _bmi_ref_range  = bmi_range_info['range']
+
                     st.markdown(
-                        f"""
-                        <div class='metric-card {bmi_class}'>
-                            <div class='metric-icon'>⚖️</div>
-                            <div class='metric-label'>BMI</div>
-                            <div class='metric-value'>{calculated_bmi:.2f}</div>
-                            <div class='metric-category'>{bmi_cat}</div>
-                            <div class='metric-range'>
-                                <span class='range-label'>Reference: {bmi_range_info['range']}</span>
-                            </div>
-                            <div class='metric-status {bmi_range_info['status_class']}'>
-                                {bmi_range_info['status']}
-                            </div>
-                        </div>
-                        """,
+                        f"<div class='card {bmi_class}' style='margin-bottom:0;'>"
+                        f"  <div class='metric-icon icon-blue'>⚖️</div>"
+                        f"  <div class='metric-label'>BMI</div>"
+                        f"  <div class='metric-value' style='color:var(--c-primary);'>"
+                        f"    {calculated_bmi:.2f}"
+                        f"  </div>"
+                        f"  <div class='metric-category'>{bmi_cat}</div>"
+                        f"  <div class='metric-range'>"
+                        f"    <span class='range-label'>Reference: {_bmi_ref_range}</span>"
+                        f"  </div>"
+                        f"  <span class='metric-status {_bmi_status_cls}'>"
+                        f"    {_bmi_status_txt}"
+                        f"  </span>"
+                        f"</div>",
                         unsafe_allow_html=True,
                     )
-                
+
                 with metrics_col2:
                     if calculated_bmr:
                         st.markdown(
-                            f"""
-                            <div class='metric-card'>
-                                <div class='metric-icon'>🔥</div>
-                                <div class='metric-label'>BMR</div>
-                                <div class='metric-value'>{calculated_bmr:.0f}</div>
-                                <div class='metric-unit'>kcal/day</div>
-                            </div>
-                            """,
+                            f"<div class='card' style='margin-bottom:0;'>"
+                            f"  <div class='metric-icon icon-amber'>🔥</div>"
+                            f"  <div class='metric-label'>BMR</div>"
+                            f"  <div class='metric-value' style='color:#D97706;'>"
+                            f"    {calculated_bmr:.0f}"
+                            f"  </div>"
+                            f"  <div class='metric-unit'>kcal / day</div>"
+                            f"</div>",
                             unsafe_allow_html=True,
                         )
                     else:
                         st.markdown(
-                            """
-                            <div class='metric-card' style='opacity: 0.6;'>
-                                <div class='metric-icon'>🔥</div>
-                                <div class='metric-label'>BMR</div>
-                                <div class='metric-value'>—</div>
-                                <div class='metric-unit'>Enter age & gender</div>
-                            </div>
-                            """,
+                            "<div class='card' style='margin-bottom:0;opacity:0.65;'>"
+                            "  <div class='metric-icon icon-amber'>🔥</div>"
+                            "  <div class='metric-label'>BMR</div>"
+                            "  <div class='metric-value'>—</div>"
+                            "  <div class='metric-unit'>Enter age &amp; gender</div>"
+                            "</div>",
                             unsafe_allow_html=True,
                         )
                 
@@ -840,18 +879,17 @@ if _show_form:
         else:
             # Show placeholder when values are incomplete
             st.markdown(
-                """
-                <div class='form-section-card' style='opacity: 0.7;'>
-                    <div class='form-section-title'>
-                      <div class='fst-icon'>📊</div>
-                      <h3>Health Metrics</h3>
-                      <span class='fst-badge'>Enter height & weight</span>
-                    </div>
-                    <p style='color: var(--c-muted); font-size: 0.9rem; margin: 0.5rem 0;'>
-                        Enter your height and weight to automatically calculate BMI and BMR.
-                    </p>
-                </div>
-                """,
+                "<div class='form-section-card'>"
+                "<div class='form-section-title'>"
+                "  <div class='fst-icon'>📊</div>"
+                "  <h3>Health Metrics</h3>"
+                "  <span class='fst-badge'>Enter height &amp; weight</span>"
+                "</div>"
+                "<p style='color:var(--c-muted);font-size:0.88rem;margin:0.5rem 0;"
+                "line-height:1.55;'>"
+                "  Enter your height and weight above to automatically calculate BMI and BMR."
+                "</p>"
+                "</div>",
                 unsafe_allow_html=True,
             )
 
@@ -1702,38 +1740,32 @@ else:
     # ══════════════════════════════════════════════════════════════════
     components.section_header("👤", "Patient Profile")
 
-    col_a, col_b = st.columns(2, gap="large")
-    left_items = [
-        ("🧑", "Name",          pat_name or "—"),
-        ("📅", "Age",           f"{age} years"),
-        ("⚥",  "Gender",        gender),
-    ]
-    right_items = [
-        ("📏", "Height",         f"{height} cm"),
-        ("⚖️", "Weight",         f"{weight} kg"),
-        ("🏃", "Activity Level", activity),
-    ]
-    with col_a:
-        for ico, lbl, val in left_items:
-            components.profile_card(ico, lbl, val)
-    with col_b:
-        for ico, lbl, val in right_items:
-            components.profile_card(ico, lbl, val)
-
-    components.section_header("🩺", "Blood Pressure")
-    bp_col1, bp_col2 = st.columns(2, gap="large")
+    # All profile data in one responsive 3-column grid
+    prof_c1, prof_c2, prof_c3 = st.columns(3, gap="large")
     _stored_bp = a.get("bp", "—")
-    with bp_col1:
-        components.profile_card("💉", "Systolic BP",  f"{_stored_bp} mmHg")
-    with bp_col2:
-        components.profile_card("💉", "Diastolic BP", f"{bp_diastolic} mmHg")
+    with prof_c1:
+        components.profile_card("🧑", "Name",         pat_name or "—")
+        components.profile_card("📅", "Age",          f"{age} years")
+        components.profile_card("⚥",  "Gender",       gender)
+    with prof_c2:
+        components.profile_card("📏", "Height",        f"{height} cm")
+        components.profile_card("⚖️", "Weight",        f"{weight} kg")
+        components.profile_card("🏃", "Activity",      activity)
+    with prof_c3:
+        components.profile_card("💉", "Systolic BP",   f"{_stored_bp} mmHg")
+        components.profile_card("💉", "Diastolic BP",  f"{bp_diastolic} mmHg")
+        components.profile_card("🏆", "Health Goal",   goal)
 
-    components.section_header("📍", "Region & Goal")
-    col_r, col_g = st.columns(2, gap="large")
-    with col_r:
-        components.profile_card("🗺️", "State / UT", region)
-    with col_g:
-        components.profile_card("🏆", "Weight Goal", goal)
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+    components.section_header("📍", "Region")
+    st.markdown(
+        f"<div class='card card-row' style='max-width:340px;'>"
+        f"  <span class='card-row-icon'>🗺️</span>"
+        f"  <span class='profile-label'>State / Union Territory</span>"
+        f"  <span class='profile-value'>{region}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
 
@@ -1742,9 +1774,10 @@ else:
     # ══════════════════════════════════════════════════════════════════
     components.section_header("📊", "Key Health Metrics")
 
-    c1, c2, c3, c4 = st.columns(4)
+    # Row 1 — 4 primary metrics
+    c1, c2, c3, c4 = st.columns(4, gap="small")
     with c1:
-        components.metric_card("BMI", f"{bmi:.1f}", "⚖️", "#2563EB")
+        components.metric_card("BMI", f"{bmi:.1f}", "⚖️", "#1A56DB")
     with c2:
         cat_color = (
             "#16A34A" if "normal"     in bmi_cat.lower() else
@@ -1757,7 +1790,10 @@ else:
     with c4:
         components.metric_card("BMR", f"{bmr:.0f} kcal", "⚡", "#7C3AED")
 
-    c5, c6 = st.columns(2)
+    st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+
+    # Row 2 — secondary metrics (3 equal columns, centred)
+    c5, c6, c7 = st.columns(3, gap="small")
     with c5:
         components.metric_card(
             "Water Intake",
@@ -1770,6 +1806,11 @@ else:
             f"{recommendations.get('protein_requirement', '—')} g",
             "🥩", "#16A34A",
         )
+    with c7:
+        # Risk status summary metric
+        _risk_status = "Normal" if diseases == ["Normal"] else "Elevated"
+        _risk_color  = "#16A34A" if diseases == ["Normal"] else "#D97706"
+        components.metric_card("Risk Status", _risk_status, "🩺", _risk_color)
 
     if bmi < 18.5:
         components.status_banner("⚠️", "Underweight",
@@ -1788,6 +1829,7 @@ else:
             f"Your BMI of <strong>{bmi:.1f}</strong> indicates obesity. "
             f"Please consult a healthcare provider.", "danger")
 
+    st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
     components.section_header("📈", "Visual Analytics")
     ch1, ch2 = st.columns(2, gap="large")
 
@@ -1812,7 +1854,13 @@ else:
         if meal_cals:
             components.chart_calorie_breakdown(pd.DataFrame(meal_cals))
         else:
-            st.info("Calorie breakdown chart will appear after meal plan is generated.")
+            st.markdown(
+                "<div style='display:flex;align-items:center;justify-content:center;"
+                "height:200px;color:#64748B;font-size:0.9rem;'>"
+                "📊 Calorie chart appears after meal plan is generated."
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
     st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
 
@@ -1829,6 +1877,7 @@ else:
             f"AI predictions have been replaced.",
             "info",
         )
+        st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
 
     pred_cols = st.columns(3, gap="large")
 
@@ -1913,6 +1962,8 @@ else:
             "All measured clinical markers are within normal reference ranges. "
             "These are model screening signals, not confirmed diagnoses.", "info")
 
+    st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
+
     # ── XAI (Explainable AI) ──────────────────────────────────────────
     _xai_hba1c      = a.get("hba1c",      6.5)
     _xai_glucose    = a.get("glucose",     120.0)
@@ -1923,6 +1974,13 @@ else:
 
     if XAI_AVAILABLE:
         components.section_header("🔬", "Explainable AI — Why These Predictions?")
+        st.markdown(
+            "<p style='font-size:0.88rem;color:#64748B;margin:0 0 1rem;line-height:1.6;'>"
+            "The charts below show which clinical features most influenced each prediction. "
+            "Longer bars = higher contribution to the model's decision."
+            "</p>",
+            unsafe_allow_html=True,
+        )
 
         # Diabetes XAI
         _conf_diab = (
@@ -1930,8 +1988,10 @@ else:
             if diabetes_confidence is not None else ""
         )
         st.markdown(
-            f"<div class='xai-tab-header'><span style='font-size:1.4rem;'>🩸</span>"
-            f"<span>Diabetes &nbsp;—&nbsp; <em>{diabetes_label}</em>{_conf_diab}</span></div>",
+            f"<div class='xai-tab-header'>"
+            f"<span style='font-size:1.35rem;line-height:1;'>🩸</span>"
+            f"<span>Diabetes &nbsp;—&nbsp; <em>{diabetes_label}</em>{_conf_diab}</span>"
+            f"</div>",
             unsafe_allow_html=True,
         )
         _xai_diab = explain_diabetes(age=age, gender=gender, bmi=bmi, hba1c=_xai_hba1c, glucose=_xai_glucose, label=diabetes_label)
@@ -1945,8 +2005,10 @@ else:
             if obesity_confidence is not None else ""
         )
         st.markdown(
-            f"<div class='xai-tab-header'><span style='font-size:1.4rem;'>⚖️</span>"
-            f"<span>Obesity &nbsp;—&nbsp; <em>{obesity_label}</em>{_conf_ob}</span></div>",
+            f"<div class='xai-tab-header'>"
+            f"<span style='font-size:1.35rem;line-height:1;'>⚖️</span>"
+            f"<span>Obesity &nbsp;—&nbsp; <em>{obesity_label}</em>{_conf_ob}</span>"
+            f"</div>",
             unsafe_allow_html=True,
         )
         _xai_ob = explain_obesity(age=age, gender=gender, bmi=bmi, label=obesity_label)
@@ -1960,8 +2022,10 @@ else:
             if kidney_confidence is not None else ""
         )
         st.markdown(
-            f"<div class='xai-tab-header'><span style='font-size:1.4rem;'>🫘</span>"
-            f"<span>Kidney Disease &nbsp;—&nbsp; <em>{kidney_label}</em>{_conf_kid}</span></div>",
+            f"<div class='xai-tab-header'>"
+            f"<span style='font-size:1.35rem;line-height:1;'>🫘</span>"
+            f"<span>Kidney Disease &nbsp;—&nbsp; <em>{kidney_label}</em>{_conf_kid}</span>"
+            f"</div>",
             unsafe_allow_html=True,
         )
         _xai_kid = explain_kidney(
@@ -1971,93 +2035,107 @@ else:
         )
         components.xai_explanation_panel(_xai_kid, "Kidney Disease")
     else:
-        st.info("ℹ️ Explainable AI module is not available. Check that backend/xai.py is present and all models are loaded.")
+        components.status_banner(
+            "ℹ️", "Explainable AI Unavailable",
+            "Check that backend/xai.py is present and all models are loaded.",
+            "info",
+        )
 
     st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
 
+    # ══════════════════════════════════════════════════════════════════
+    #  SECTION — Nutrition & Meal Recommendations
+    # ══════════════════════════════════════════════════════════════════
+    components.section_header("🍽️", "Nutrition & Meal Recommendations")
+
     weekly_plan = st.session_state.get('weekly_plan', {})
+
+    # ── Meal plan diversity summary (compact, no raw JSON) ────────────
     diversity = weekly_plan.get('diversity_metrics') or recommendations.get('diversity', {})
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Unique Foods", diversity.get('unique_foods', 0))
-    with col2:
-        st.metric("Unique %", f"{diversity.get('unique_food_percentage', 0)}%")
-    with col3:
-        st.metric("Max Repetition", diversity.get('max_repetition_count', 0))
-    with col4:
-        st.metric("Repeated Foods", diversity.get('repeated_foods_count', 0))
+    if diversity and any(diversity.values()):
+        _unique  = diversity.get('unique_foods', 0)
+        _uniq_pct= diversity.get('unique_food_percentage', 0)
+        _max_rep = diversity.get('max_repetition_count', 0)
+        if _unique > 0:
+            st.markdown(
+                f"<div style='display:flex;flex-wrap:wrap;gap:0.55rem;"
+                f"margin-bottom:1rem;align-items:center;'>"
+                f"<span style='font-size:0.8rem;font-weight:700;color:#64748B;"
+                f"text-transform:uppercase;letter-spacing:0.08em;'>Meal Plan Quality:</span>"
+                f"<span style='background:#EBF0FF;color:#1E3A8A;border:1px solid #C3D0F5;"
+                f"border-radius:999px;padding:0.22rem 0.7rem;font-size:0.78rem;font-weight:700;'>"
+                f"🥗 {_unique} unique foods</span>"
+                f"<span style='background:#EBF0FF;color:#1E3A8A;border:1px solid #C3D0F5;"
+                f"border-radius:999px;padding:0.22rem 0.7rem;font-size:0.78rem;font-weight:700;'>"
+                f"✨ {_uniq_pct}% variety</span>"
+                f"<span style='background:#EBF0FF;color:#1E3A8A;border:1px solid #C3D0F5;"
+                f"border-radius:999px;padding:0.22rem 0.7rem;font-size:0.78rem;font-weight:700;'>"
+                f"🔄 Max {_max_rep}× repetition</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
-    st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
-
-
+    # ── Weekly plan ───────────────────────────────────────────────────
     weekly_plan = st.session_state.get('weekly_plan', weekly_plan)
     for day_plan in weekly_plan.get('weekly_plan', []):
-        day_name = day_plan.get('day', 'Unknown Day')
-        day_number = day_plan.get('day_number', 0)
-        meals = day_plan.get('meals', {})
+        day_name       = day_plan.get('day', 'Unknown Day')
+        day_number     = day_plan.get('day_number', 0)
+        meals          = day_plan.get('meals', {})
         daily_nutrition = day_plan.get('daily_nutrition', {})
 
-        with st.expander(f"📅 {day_name}", expanded=(day_number == 1)):
-            # Daily nutrition summary
-            nut_col1, nut_col2, nut_col3 = st.columns(3)
-            with nut_col1:
-                st.metric("Calories", f"{daily_nutrition.get('calories', 0):.0f} kcal")
-            with nut_col2:
-                st.metric("Protein", f"{daily_nutrition.get('protein', 0):.1f}g")
-            with nut_col3:
-                st.metric("Fiber", f"{daily_nutrition.get('fiber', 0):.1f}g")
-
-            st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
+        with st.expander(day_name, expanded=(day_number == 1)):
+            # Compact daily nutrition strip
+            _day_cal  = daily_nutrition.get('calories', 0)
+            _day_prot = daily_nutrition.get('protein', 0)
+            _day_fib  = daily_nutrition.get('fiber', 0)
+            if _day_cal > 0:
+                st.markdown(
+                    f"<div style='display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;'>"
+                    f"<span style='background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;"
+                    f"border-radius:8px;padding:0.28rem 0.65rem;font-size:0.8rem;font-weight:700;'>"
+                    f"🔥 {_day_cal:.0f} kcal</span>"
+                    f"<span style='background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;"
+                    f"border-radius:8px;padding:0.28rem 0.65rem;font-size:0.8rem;font-weight:700;'>"
+                    f"🥩 {_day_prot:.1f}g protein</span>"
+                    f"<span style='background:#F0F9FF;color:#0C4A6E;border:1px solid #BAE6FD;"
+                    f"border-radius:8px;padding:0.28rem 0.65rem;font-size:0.8rem;font-weight:700;'>"
+                    f"🌾 {_day_fib:.1f}g fibre</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
             # Display meals for the day
             for meal_type, foods in meals.items():
                 if foods:
                     components.meal_tag(meal_type.replace('_', ' ').title())
-
                     for food in foods:
-                        food_name = food.get('Dish Name', 'Unknown Food')
-                        calories = food.get('Calories (kcal)', 0)
-                        protein = food.get('Protein (g)', None)
-                        carbs = food.get('Carbohydrates (g)', None)
-                        fat = food.get('Fats (g)', None)
-                        fiber = food.get('Fibre (g)', None)
-
-                        # Display food item card
                         components.food_item_card(
-                            food_name=food_name,
-                            calories=calories,
-                            protein=protein,
-                            carbs=carbs,
-                            fat=fat,
-                            fiber=fiber,
+                            food_name=clean_display_text(food.get('Dish Name', 'Unknown Food')),
+                            calories=food.get('Calories (kcal)', 0),
+                            protein=food.get('Protein (g)', None),
+                            carbs=food.get('Carbohydrates (g)', None),
+                            fat=food.get('Fats (g)', None),
+                            fiber=food.get('Fibre (g)', None),
                             meal_type=meal_type,
                             food_index=0,
-                            show_swap=False  # Disable swap for weekly plan
+                            show_swap=False,
                         )
-                        st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
-    
-    # Display safety report
+
+    # ── Safety filter info (compact, no raw metrics) ──────────────────
     safety = weekly_plan.get('safety_report', {})
-    if safety.get('filtering_applied'):
-        st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
-        components.section_header("🛡️", "Safety Filter Report")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Original Foods", safety.get('original_food_count', 0))
-        with col2:
-            st.metric("Filtered Foods", safety.get('filtered_food_count', 0))
-        
-        st.info(f"Applied disease and severity filters. Removed {safety.get('foods_removed', 0)} foods for safety.")
-    
-    # Display scoring info
-    scoring = weekly_plan.get('scoring_info', {})
-    st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
-    components.section_header("📊", "Scoring Information")
-    st.json(scoring)
+    if safety.get('filtering_applied') and safety.get('foods_removed', 0) > 0:
+        components.status_banner(
+            "🛡️", "Safety Filters Applied",
+            f"Removed <strong>{safety.get('foods_removed', 0)}</strong> foods "
+            f"based on your disease profile and severity level. "
+            f"Meal plan uses {safety.get('filtered_food_count', 0)} safe options "
+            f"from {safety.get('original_food_count', 0)} available.",
+            "info",
+        )
     
     # Foods to avoid and nutrition tips (shown regardless of weekly/daily plan)
     st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
-    
+
     components.section_header("🚫", "Foods to Avoid")
     avoid = recommendations.get("foods_to_avoid", [])
     if avoid:
@@ -2105,177 +2183,158 @@ else:
 
     if "weekly_plan" not in st.session_state:
         target_calories = recommendations.get("target_calories", tdee)
-        total_calories = recommendations.get("total_calories", 0)
-        calorie_diff = recommendations.get("calorie_difference", 0)
-        
-        # Calorie summary card
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(
-                "Daily Target", 
-                f"{target_calories:.0f} kcal",
-                help="Your recommended daily calorie intake based on TDEE"
+        total_calories  = recommendations.get("total_calories", 0)
+        calorie_diff    = recommendations.get("calorie_difference", 0)
+        nutrition_summary = recommendations.get("nutrition_summary", {})
+
+        # Clean calorie summary banner (replaces raw st.metric blocks)
+        _diff_text = ""
+        if abs(calorie_diff) > 10:
+            _diff_sign  = "+" if calorie_diff > 0 else ""
+            _diff_color = "#D97706" if calorie_diff > 0 else "#059669"
+            _diff_text  = (
+                f"<span style='color:{_diff_color};font-size:0.8rem;font-weight:700;'>"
+                f"({_diff_sign}{calorie_diff:.0f} kcal vs target)</span>"
             )
-        with col2:
-            st.metric(
-                "Recommended", 
-                f"{total_calories:.0f} kcal",
-                f"{calorie_diff:+.0f} kcal" if abs(calorie_diff) > 10 else "On target"
-            )
-        with col3:
-            nutrition_summary = recommendations.get("nutrition_summary", {})
-            st.metric(
-                "Total Protein", 
-                f"{nutrition_summary.get('protein', 0):.1f}g"
-            )
-        
-        st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+        _prot_val = nutrition_summary.get('protein', 0)
+
+        st.markdown(
+            f"<div style='background:#F4F7FF;border:1px solid #DDE5F7;border-left:4px solid #1A56DB;"
+            f"border-radius:12px;padding:0.9rem 1.2rem;margin-bottom:1rem;"
+            f"display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;'>"
+            f"<div style='min-width:0;'>"
+            f"  <div style='font-size:0.66rem;font-weight:700;text-transform:uppercase;"
+            f"letter-spacing:0.08em;color:#64748B;'>Daily Target</div>"
+            f"  <div style='font-size:1.3rem;font-weight:900;color:#1A56DB;'>{target_calories:.0f} kcal</div>"
+            f"</div>"
+            f"<div style='min-width:0;'>"
+            f"  <div style='font-size:0.66rem;font-weight:700;text-transform:uppercase;"
+            f"letter-spacing:0.08em;color:#64748B;'>Recommended Plan</div>"
+            f"  <div style='font-size:1.3rem;font-weight:900;color:#0F172A;'>"
+            f"{total_calories:.0f} kcal &nbsp;{_diff_text}</div>"
+            f"</div>"
+            f"<div style='min-width:0;'>"
+            f"  <div style='font-size:0.66rem;font-weight:700;text-transform:uppercase;"
+            f"letter-spacing:0.08em;color:#64748B;'>Total Protein</div>"
+            f"  <div style='font-size:1.3rem;font-weight:900;color:#059669;'>{_prot_val:.1f}g</div>"
+            f"</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
     else:
         meal_plan = {}
     
-    # Display validation warnings if any
-    if meal_validation.get('warnings'):
-        for warning in meal_validation['warnings']:
-            st.warning(f"⚠️ {warning}")
-    if meal_validation.get('errors'):
-        for err in meal_validation['errors']:
-            st.error(err)
-    
     if meal_plan:
         meal_explanations = recommendations.get("meal_explanations", {})
-        
+
         # Initialize swap state if not exists
         if "swap_state" not in st.session_state:
             st.session_state.swap_state = {
-                "active_swap": None,  # (meal_type, food_index, current_food)
+                "active_swap": None,
                 "alternatives": None,
-                "selected_alternative": None
+                "selected_alternative": None,
             }
-        
+
         for meal_name, meal_data in meal_plan.items():
             components.meal_tag(meal_name.capitalize())
-            
-            # Display meal explanation if available
+
+            # Meal explanation (enhanced recommender only)
             if use_enhanced and meal_name in meal_explanations:
-                st.info(f"💡 {meal_explanations[meal_name]}")
-            
+                st.markdown(
+                    f"<div style='font-size:0.84rem;color:#64748B;margin:-0.2rem 0 0.5rem;"
+                    f"padding:0.45rem 0.75rem;background:#F4F7FF;border-radius:8px;"
+                    f"border-left:3px solid #C3D0F5;'>💡 {meal_explanations[meal_name]}</div>",
+                    unsafe_allow_html=True,
+                )
+
             if isinstance(meal_data, pd.DataFrame) and not meal_data.empty:
-                # Display each food item
                 for idx, row in meal_data.iterrows():
-                    food_name = row.get("Dish Name", "Unknown Food")
-                    calories = row.get("Calories (kcal)", 0)
-                    protein = row.get("Protein (g)", None)
-                    carbs = row.get("Carbohydrates (g)", None)
-                    fat = row.get("Fats (g)", None)
-                    fiber = row.get("Fibre (g)", None)
-                    
-                    # Check if this food is being swapped
-                    is_swapping = (st.session_state.swap_state["active_swap"] == 
-                                  (meal_name, idx, food_name))
-                    
-                    # Display food item card with swap button
-                    swap_clicked = components.food_item_card(
-                        food_name=food_name,
-                        calories=calories,
-                        protein=protein,
-                        carbs=carbs,
-                        fat=fat,
-                        fiber=fiber,
-                        meal_type=meal_name,
-                        food_index=idx,
-                        show_swap=use_enhanced and not is_swapping
+                    food_name = clean_display_text(row.get("Dish Name", "Unknown Food"))
+                    calories  = row.get("Calories (kcal)", 0)
+                    protein   = row.get("Protein (g)", None)
+                    carbs     = row.get("Carbohydrates (g)", None)
+                    fat       = row.get("Fats (g)", None)
+                    fiber     = row.get("Fibre (g)", None)
+
+                    is_swapping = (
+                        st.session_state.swap_state["active_swap"] == (meal_name, idx, food_name)
                     )
-                    
+                    swap_clicked = components.food_item_card(
+                        food_name=food_name, calories=calories,
+                        protein=protein, carbs=carbs, fat=fat, fiber=fiber,
+                        meal_type=meal_name, food_index=idx,
+                        show_swap=use_enhanced and not is_swapping,
+                    )
                     if swap_clicked and use_enhanced:
                         st.session_state.swap_state["active_swap"] = (meal_name, idx, food_name)
                         st.rerun()
-                    
-                    st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
-                
+
             elif isinstance(meal_data, list) and meal_data:
-                # Display balanced meal format
                 if (use_improved_planner or use_enhanced) and len(meal_data) <= 3:
-                    # This is likely a balanced meal (main + protein + vegetable)
                     _display_balanced_meal(meal_data, meal_name, diseases, tdee)
                 else:
-                    # Display each food item from list format (fallback)
                     for idx, food_item in enumerate(meal_data):
                         if isinstance(food_item, dict):
                             food_name = food_item.get("Dish Name", food_item.get("food_name", "Unknown Food"))
-                            calories = food_item.get("Calories (kcal)", food_item.get("Calories", food_item.get("calories", 0)))
-                            protein = food_item.get("Protein (g)", food_item.get("Protein", food_item.get("protein", None)))
-                            carbs = food_item.get("Carbohydrates (g)", food_item.get("Carbohydrates", food_item.get("carbs", None)))
-                            fat = food_item.get("Fats (g)", food_item.get("Fats", food_item.get("fat", None)))
-                            fiber = food_item.get("Fibre (g)", food_item.get("Fibre", food_item.get("fiber", None)))
-                            
-                            # Check if this food is being swapped
-                            is_swapping = (st.session_state.swap_state["active_swap"] == 
-                                          (meal_name, idx, food_name))
-                            
-                            # Display food item card with swap button
-                            swap_clicked = components.food_item_card(
-                                food_name=food_name,
-                                calories=calories,
-                                protein=protein,
-                                carbs=carbs,
-                                fat=fat,
-                                fiber=fiber,
-                                meal_type=meal_name,
-                                food_index=idx,
-                                show_swap=use_enhanced and not is_swapping
+                            calories  = food_item.get("Calories (kcal)", food_item.get("Calories", food_item.get("calories", 0)))
+                            protein   = food_item.get("Protein (g)", food_item.get("Protein", food_item.get("protein", None)))
+                            carbs     = food_item.get("Carbohydrates (g)", food_item.get("Carbohydrates", food_item.get("carbs", None)))
+                            fat       = food_item.get("Fats (g)", food_item.get("Fats", food_item.get("fat", None)))
+                            fiber     = food_item.get("Fibre (g)", food_item.get("Fibre", food_item.get("fiber", None)))
+
+                            is_swapping = (
+                                st.session_state.swap_state["active_swap"] == (meal_name, idx, food_name)
                             )
-                            
+                            swap_clicked = components.food_item_card(
+                                food_name=food_name, calories=calories,
+                                protein=protein, carbs=carbs, fat=fat, fiber=fiber,
+                                meal_type=meal_name, food_index=idx,
+                                show_swap=use_enhanced and not is_swapping,
+                            )
                             if swap_clicked and use_enhanced:
                                 st.session_state.swap_state["active_swap"] = (meal_name, idx, food_name)
                                 st.rerun()
-                            
-                            st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
             else:
-                st.info(f"No {meal_name.lower()} data available.")
-            
-            st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
-        
+                st.markdown(
+                    f"<p style='font-size:0.88rem;color:#64748B;font-style:italic;'>"
+                    f"No {meal_name.lower()} data available.</p>",
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("<div style='height:0.25rem'></div>", unsafe_allow_html=True)
+
         # Handle active swap - show alternatives
         if use_enhanced and st.session_state.swap_state["active_swap"]:
             meal_type, food_index, current_food = st.session_state.swap_state["active_swap"]
-            
+
             st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
             components.section_header("🔄", "Food Swap Alternatives")
-            
+
             # Get alternatives using enhanced recommender
             if st.session_state.swap_state["alternatives"] is None:
                 try:
                     from backend.services.enhanced_recommender import EnhancedNutritionRecommender
-                    
-                    # Build user profile
                     user_profile = {
-                        'diseases': diseases,
-                        'age': age,
-                        'gender': gender,
-                        'height': height,
-                        'weight': weight,
-                        'bmi': bmi,
-                        'activity_level': activity,
-                        'daily_calories': tdee,
-                        'hba1c': hba1c,
-                        'glucose': glucose,
-                        'bp': bp,
-                        'sodium': sodium,
-                        'potassium': potassium,
-                        'creatinine': creatinine,
+                        'diseases': diseases, 'age': age, 'gender': gender,
+                        'height': height, 'weight': weight, 'bmi': bmi,
+                        'activity_level': activity, 'daily_calories': tdee,
+                        'hba1c': a.get("hba1c", 5.5),
+                        'glucose': a.get("glucose", 90),
+                        'bp': a.get("bp", 120),
+                        'sodium': a.get("sodium", 138.0),
+                        'potassium': a.get("potassium", 4.5),
+                        'creatinine': a.get("creatinine", 1.0),
                         'goal': a.get("goal", "Weight Loss"),
                         'region': a.get("region", "Andhra Pradesh"),
-                        'severity': a.get("severity", {}),  # ensures swap respects disease severity
+                        'severity': a.get("severity", {}),
                     }
-                    
                     recommender = EnhancedNutritionRecommender()
                     alternatives = recommender.get_swap_alternatives(
                         current_food=current_food,
                         meal_type=meal_type,
                         user_profile=user_profile,
-                        limit=3
+                        limit=3,
                     )
-                    
                     st.session_state.swap_state["alternatives"] = alternatives
                     st.rerun()
                 except Exception as e:
@@ -2285,129 +2344,51 @@ else:
                         st.session_state.swap_state["alternatives"] = None
                         st.rerun()
             else:
-                # Show alternatives
                 alternatives = st.session_state.swap_state["alternatives"]
-                
                 if not alternatives:
-                    st.info("No suitable alternatives found.")
+                    components.status_banner("ℹ️", "No Alternatives Found",
+                        "No suitable alternatives available for this food item.", "info")
                 else:
-                    st.info(f"Choose an alternative to replace **{current_food}**:")
-                    
+                    components.status_banner("🔄", f"Replace: {current_food}",
+                        "Select one of the alternatives below.", "info")
                     for alt_idx, alt_food in enumerate(alternatives):
                         if isinstance(alt_food, pd.Series):
-                            alt_name = alt_food.get("Dish Name", "Unknown")
-                            alt_cal = alt_food.get("Calories (kcal)", 0)
-                            alt_prot = alt_food.get("Protein (g)", None)
+                            alt_name  = alt_food.get("Dish Name", "Unknown")
+                            alt_cal   = alt_food.get("Calories (kcal)", 0)
+                            alt_prot  = alt_food.get("Protein (g)", None)
                             alt_carbs = alt_food.get("Carbohydrates (g)", None)
-                            alt_fat = alt_food.get("Fats (g)", None)
+                            alt_fat   = alt_food.get("Fats (g)", None)
                             alt_fiber = alt_food.get("Fibre (g)", None)
                         else:
-                            alt_name = alt_food.get("Dish Name", alt_food.get("food_name", "Unknown"))
-                            alt_cal = alt_food.get("Calories (kcal)", alt_food.get("Calories", alt_food.get("calories", 0)))
-                            alt_prot = alt_food.get("Protein (g)", alt_food.get("Protein", alt_food.get("protein", None)))
+                            alt_name  = alt_food.get("Dish Name", alt_food.get("food_name", "Unknown"))
+                            alt_cal   = alt_food.get("Calories (kcal)", alt_food.get("Calories", alt_food.get("calories", 0)))
+                            alt_prot  = alt_food.get("Protein (g)", alt_food.get("Protein", alt_food.get("protein", None)))
                             alt_carbs = alt_food.get("Carbohydrates (g)", alt_food.get("Carbohydrates", alt_food.get("carbs", None)))
-                            alt_fat = alt_food.get("Fats (g)", alt_food.get("Fats", alt_food.get("fat", None)))
+                            alt_fat   = alt_food.get("Fats (g)", alt_food.get("Fats", alt_food.get("fat", None)))
                             alt_fiber = alt_food.get("Fibre (g)", alt_food.get("Fibre", alt_food.get("fiber", None)))
-                        
-                        # Display alternative card
+
                         components.food_item_card(
-                            food_name=alt_name,
-                            calories=alt_cal,
-                            protein=alt_prot,
-                            carbs=alt_carbs,
-                            fat=alt_fat,
-                            fiber=alt_fiber,
-                            meal_type=meal_type,
-                            food_index=alt_idx,
-                            show_swap=False
+                            food_name=alt_name, calories=alt_cal,
+                            protein=alt_prot, carbs=alt_carbs, fat=alt_fat, fiber=alt_fiber,
+                            meal_type=meal_type, food_index=alt_idx, show_swap=False,
                         )
-                        
-                        # Select button
-                        if st.button(f"Select {alt_name}", key=f"select_alt_{alt_idx}"):
-                            # Update meal plan with selected alternative
-                            if isinstance(meal_plan[meal_type], list):
-                                meal_plan[meal_type][food_index] = alt_food.to_dict() if isinstance(alt_food, pd.Series) else alt_food
-                            
+                        if st.button(f"✅ Select {alt_name}", key=f"select_alt_{alt_idx}"):
+                            if isinstance(meal_plan.get(meal_type), list):
+                                meal_plan[meal_type][food_index] = (
+                                    alt_food.to_dict() if isinstance(alt_food, pd.Series) else alt_food
+                                )
                             st.success(f"Replaced {current_food} with {alt_name}!")
                             st.session_state.swap_state["active_swap"] = None
                             st.session_state.swap_state["alternatives"] = None
                             st.rerun()
-                        
-                        st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
-                
-                # Cancel button
-                if st.button("Cancel Swap", key="swap_cancel"):
+
+                if st.button("✖ Cancel Swap", key="swap_cancel"):
                     st.session_state.swap_state["active_swap"] = None
                     st.session_state.swap_state["alternatives"] = None
                     st.rerun()
     # End of daily meal plan section (only shown when weekly planner unavailable)
 
 
-def _display_recommendation_charts(meal_plan: dict, nutrition_summary: dict, target_calories: float):
-    """Display dynamic charts for recommendations."""
-    import plotly.graph_objects as go
-    import plotly.express as px
-    
-    # Calculate meal calorie distribution
-    meal_calories = {}
-    for meal_name, foods in meal_plan.items():
-        if isinstance(foods, list):
-            meal_calories[meal_name] = sum(
-                f.get('Calories (kcal)', f.get('Calories', f.get('calories', 0)))
-                for f in foods if isinstance(f, dict)
-            )
-    
-    # Chart 1: Meal Calorie Distribution (Bar Chart)
-    if meal_calories:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📊 Meal Calorie Distribution")
-            meal_names = list(meal_calories.keys())
-            cal_values = list(meal_calories.values())
-            
-            fig = go.Figure(data=[
-                go.Bar(
-                    x=meal_names,
-                    y=cal_values,
-                    marker_color=['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'],
-                    text=[f"{v:.0f} kcal" for v in cal_values],
-                    textposition='outside'
-                )
-            ])
-            
-            fig.update_layout(
-                title="Calories per Meal",
-                xaxis_title="Meal",
-                yaxis_title="Calories (kcal)",
-                height=300,
-                margin=dict(l=20, r=20, t=40, b=20)
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Chart 2: Macronutrient Distribution (Donut Chart)
-        with col2:
-            st.subheader("🥗 Macronutrient Distribution")
-            macros = nutrition_summary
-            if macros and sum(macros.values()) > 0:
-                fig = go.Figure(data=[go.Pie(
-                    labels=['Protein', 'Carbohydrates', 'Fat', 'Fiber'],
-                    values=[macros.get('protein', 0), macros.get('carbohydrates', 0), 
-                           macros.get('fat', 0), macros.get('fiber', 0)],
-                    hole=0.4,
-                    marker=dict(colors=['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'])
-                )])
-                
-                fig.update_layout(
-                    title="Daily Macronutrients",
-                    height=300,
-                    margin=dict(l=20, r=20, t=40, b=20),
-                    showlegend=True
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-    
     st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
 """components.py
-Professional Blue & White UI component library — Smart Health Dashboard.
+Premium Blue & White UI component library — Smart Health Dashboard v4.0
 
-All public functions (signatures unchanged):
+All public functions (signatures unchanged for full backward compatibility):
     load_css()
     hero_banner(title, subtitle, username)
     section_header(icon, title)
@@ -15,18 +15,18 @@ All public functions (signatures unchanged):
     meal_tag(label)
     welcome_screen()
     download_button(data, filename, format)
-
     sidebar_user_chip(display_name)
     form_progress_steps()
     dashboard_stats_strip(bmi, bmi_cat, tdee, diseases)
     page_footer()
-
     chart_bmi_gauge(bmi)
     chart_disease_risk(score, title)
     chart_macronutrient(df)
     chart_calorie_breakdown(df)
     chart_xai_feature_importance(feature_rows, disease_name)
     xai_explanation_panel(xai_result, disease_name)
+    food_item_card(food_name, calories, protein, carbs, fat, fiber,
+                   meal_type, food_index, show_swap)
 """
 
 import json
@@ -37,7 +37,7 @@ import plotly.graph_objects as go
 
 
 # ════════════════════════════════════════════════════════════════════
-#  CSS
+#  CSS LOADER
 # ════════════════════════════════════════════════════════════════════
 
 def load_css():
@@ -58,25 +58,26 @@ def hero_banner(
     subtitle: str = "AI-Powered Personalised Nutrition & Disease Risk Analysis",
     username: str = "",
 ):
-    """Gradient header banner shown at the top of every page."""
+    """Full-width gradient header banner."""
     if username:
         _initial = username.strip()[0].upper() if username.strip() else "U"
-        chip = (
-            f"<div class='hero-profile-chip' title='Signed in as {username}'>"
-            f"<div class='hpc-avatar'>{_initial}</div>"
-            f"<span class='hpc-name'>{username}</span>"
+        chip_html = (
+            f"<div class='hero-profile-chip'>"
+            f"  <div class='hpc-avatar'>{_initial}</div>"
+            f"  <span class='hpc-name'>{username}</span>"
             f"</div>"
         )
     else:
-        chip = ""
+        chip_html = ""
+
     st.markdown(
         f"<div class='hero-banner'>"
-        f"<div class='hero-ring'></div>"
-        f"<div class='hero-left'>"
-        f"<p class='hero-title'>&#129338;&nbsp;{title}</p>"
-        f"<p class='hero-subtitle'>{subtitle}</p>"
-        f"</div>"
-        f"{chip}"
+        f"  <div class='hero-ring'></div>"
+        f"  <div class='hero-left'>"
+        f"    <p class='hero-title'>&#129338;&nbsp;{title}</p>"
+        f"    <p class='hero-subtitle'>{subtitle}</p>"
+        f"  </div>"
+        f"  {chip_html}"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -90,8 +91,8 @@ def section_header(icon: str, title: str):
     """Underlined section divider with icon and title."""
     st.markdown(
         f"<div class='section-header'>"
-        f"<span class='sh-icon'>{icon}</span>"
-        f"<h3>{title}</h3>"
+        f"  <span class='sh-icon'>{icon}</span>"
+        f"  <h3>{title}</h3>"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -102,15 +103,7 @@ def section_header(icon: str, title: str):
 # ════════════════════════════════════════════════════════════════════
 
 def metric_card(label: str, value: str, icon: str = "", color: str = "#2563EB"):
-    """Centred KPI card: icon · label · big value.
-
-    Parameters
-    ----------
-    label : str   — metric name shown above the value
-    value : str   — formatted metric value (large display)
-    icon  : str   — emoji or HTML icon
-    color : str   — hex accent colour for the value text
-    """
+    """Centred KPI card: icon · label · big value."""
     _icon_class = {
         "#2563EB": "icon-blue",
         "#16A34A": "icon-green",
@@ -121,9 +114,9 @@ def metric_card(label: str, value: str, icon: str = "", color: str = "#2563EB"):
 
     st.markdown(
         f"<div class='card animate-in'>"
-        f"<div class='metric-icon {_icon_class}'>{icon}</div>"
-        f"<div class='metric-label'>{label}</div>"
-        f"<div class='metric-value' style='color:{color};'>{value}</div>"
+        f"  <div class='metric-icon {_icon_class}'>{icon}</div>"
+        f"  <div class='metric-label'>{label}</div>"
+        f"  <div class='metric-value' style='color:{color};'>{value}</div>"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -134,12 +127,12 @@ def metric_card(label: str, value: str, icon: str = "", color: str = "#2563EB"):
 # ════════════════════════════════════════════════════════════════════
 
 def profile_card(icon: str, label: str, value: str):
-    """Horizontal card for Patient Profile tab."""
+    """Horizontal card for Patient Profile."""
     st.markdown(
         f"<div class='card card-row'>"
-        f"<span class='card-row-icon'>{icon}</span>"
-        f"<span class='profile-label'>{label}</span>"
-        f"<span class='profile-value'>{value}</span>"
+        f"  <span class='card-row-icon'>{icon}</span>"
+        f"  <span class='profile-label'>{label}</span>"
+        f"  <span class='profile-value'>{value}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -163,12 +156,7 @@ def badge(label: str, color: str = "#2563EB", variant: str = ""):
 # ════════════════════════════════════════════════════════════════════
 
 def status_banner(icon: str, title: str, body: str, level: str = "info"):
-    """Coloured alert banner.
-
-    Parameters
-    ----------
-    level : 'ok' | 'warning' | 'danger' | 'info'
-    """
+    """Coloured alert banner. level: 'ok' | 'warning' | 'danger' | 'info'"""
     cls = {
         "ok":      "status-ok",
         "warning": "status-warning",
@@ -176,16 +164,16 @@ def status_banner(icon: str, title: str, body: str, level: str = "info"):
         "info":    "status-info",
     }.get(level, "status-info")
 
-    banner_html = (
+    st.markdown(
         f"<div class='status-banner {cls}'>"
-        f"<span class='sb-icon'>{icon}</span>"
-        f"<div class='sb-body'>"
-        f"<strong class='sb-title'>{title}</strong>"
-        f"<span class='sb-text'>&nbsp;{body}</span>"
-        f"</div>"
-        f"</div>"
+        f"  <span class='sb-icon'>{icon}</span>"
+        f"  <div class='sb-body'>"
+        f"    <strong class='sb-title'>{title}</strong>"
+        f"    <span class='sb-text'>&nbsp;{body}</span>"
+        f"  </div>"
+        f"</div>",
+        unsafe_allow_html=True,
     )
-    st.markdown(banner_html, unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -198,38 +186,23 @@ def prediction_card(
     pred_class: str,
     risk: str = "Low",
     level: str = "low",
-    # New parameters — replace old `confidence`
     final_status: str = "",
     model_probability: "float | None" = None,
-    # Kept for backward-compat; ignored when model_probability is provided
     confidence: "float | None" = None,
 ):
-    """Tall disease prediction card.
-
-    Parameters
-    ----------
-    icon              : Emoji (e.g. '🩸')
-    name              : Disease display name
-    pred_class        : Human-readable model output label
-    risk              : Badge text — comes from RiskResult.card_risk_text
-    level             : 'high' | 'medium' | 'low' — controls colour stripe
-    final_status      : RiskResult.final_status — shown as sub-label on card
-    model_probability : RiskResult.model_probability (0–100 float)
-    confidence        : Legacy parameter — ignored when model_probability given.
-    """
+    """Disease prediction card with stripe, icon, result and risk badge."""
     # Stripe gradient per risk level
     stripe = {
         "high":   "background:linear-gradient(90deg,#DC2626,#B91C1C);",
         "medium": "background:linear-gradient(90deg,#F59E0B,#D97706);",
-        "low":    "background:linear-gradient(90deg,#16A34A,#15803D);",
-    }.get(level, "background:linear-gradient(90deg,#16A34A,#15803D);")
+        "low":    "background:linear-gradient(90deg,#059669,#047857);",
+    }.get(level, "background:linear-gradient(90deg,#059669,#047857);")
 
-    # Icon background
     icon_bg = {
-        "high":   "background:#FEF2F2;",
-        "medium": "background:#FFFBEB;",
-        "low":    "background:#F0FDF4;",
-    }.get(level, "background:#F0FDF4;")
+        "high":   "background:#FEF2F2;border:2px solid #FECACA;",
+        "medium": "background:#FFFBEB;border:2px solid #FDE68A;",
+        "low":    "background:#ECFDF5;border:2px solid #A7F3D0;",
+    }.get(level, "background:#ECFDF5;border:2px solid #A7F3D0;")
 
     badge_cls = {
         "high":   "pred-risk-high",
@@ -239,56 +212,55 @@ def prediction_card(
 
     dot = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(level, "🟢")
 
-    # Badge text — don't blindly append " Risk"
-    _no_suffix = {"Screening Flag", "Unavailable", "Borderline",
-                  "Model Flag", "Normal"}
+    # Badge text
+    _no_suffix = {"Screening Flag", "Unavailable", "Borderline", "Model Flag", "Normal"}
     badge_text = risk if (risk in _no_suffix or risk.endswith("Risk")) else f"{risk} Risk"
 
-    # Probability display
+    # Model probability display
     _prob = model_probability if model_probability is not None else confidence
     prob_html = ""
     if _prob is not None:
         prob_html = (
             f"<div class='pred-confidence'>"
-            f"Model Probability:&nbsp;{_prob:.1f}%"
+            f"Model Probability:&nbsp;<strong>{_prob:.1f}%</strong>"
             f"</div>"
         )
 
     # Final-status sub-label
     status_html = ""
     if final_status and final_status not in ("", "Unknown", risk):
-        _status_colors = {
-            "High Risk":     ("background:#FEF2F2;color:#991B1B;",  "🔴"),
-            "Moderate Risk": ("background:#FFFBEB;color:#92400E;",  "🟡"),
-            "Model Flag":    ("background:#EFF6FF;color:#1E40AF;",  "🔵"),
-            "Low Risk":      ("background:#F0FDF4;color:#14532D;",  "🟢"),
-            "Borderline":    ("background:#FFFBEB;color:#92400E;",  "🟡"),
-            "Unavailable":   ("background:#F8FAFC;color:#64748B;",  "⚪"),
+        _status_styles = {
+            "High Risk":     ("background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;", "🔴"),
+            "Moderate Risk": ("background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;", "🟡"),
+            "Model Flag":    ("background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE;", "🔵"),
+            "Low Risk":      ("background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;", "🟢"),
+            "Borderline":    ("background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;", "🟡"),
+            "Unavailable":   ("background:#F8FAFC;color:#64748B;border:1px solid #E2E8F0;", "⚪"),
         }
-        _sc, _sdot = _status_colors.get(
+        _sc, _sdot = _status_styles.get(
             final_status,
-            ("background:#EFF6FF;color:#1E40AF;", "ℹ️"),
+            ("background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE;", "ℹ️"),
         )
         status_html = (
             f"<div style='margin-top:0.45rem;padding:0.22rem 0.65rem;"
-            f"border-radius:99px;font-size:0.71rem;font-weight:700;"
+            f"border-radius:999px;font-size:0.70rem;font-weight:700;"
             f"display:inline-block;{_sc}'>"
             f"{_sdot}&nbsp;{final_status}"
             f"</div>"
         )
 
-    card_html = (
+    st.markdown(
         f"<div class='pred-card'>"
-        f"<div class='pred-card-stripe' style='{stripe}'></div>"
-        f"<div class='pred-icon-wrap' style='{icon_bg}'>{icon}</div>"
-        f"<div class='pred-name'>{name}</div>"
-        f"<div class='pred-result'>{pred_class}</div>"
-        f"<span class='pred-risk-badge {badge_cls}'>{dot}&nbsp;{badge_text}</span>"
-        f"{status_html}"
-        f"{prob_html}"
-        f"</div>"
+        f"  <div class='pred-card-stripe' style='{stripe}'></div>"
+        f"  <div class='pred-icon-wrap' style='{icon_bg}'>{icon}</div>"
+        f"  <div class='pred-name'>{name}</div>"
+        f"  <div class='pred-result'>{pred_class}</div>"
+        f"  <span class='pred-risk-badge {badge_cls}'>{dot}&nbsp;{badge_text}</span>"
+        f"  {status_html}"
+        f"  {prob_html}"
+        f"</div>",
+        unsafe_allow_html=True,
     )
-    st.markdown(card_html, unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -297,10 +269,12 @@ def prediction_card(
 
 def tip_list(tips: list):
     """Numbered, styled nutrition tip list."""
+    if not tips:
+        return
     items = "".join(
         f"<div class='tip-item'>"
-        f"<span class='tip-num'>{i}</span>"
-        f"<span class='tip-text'>{tip}</span>"
+        f"  <span class='tip-num'>{i}</span>"
+        f"  <span class='tip-text'>{tip}</span>"
         f"</div>"
         for i, tip in enumerate(tips, start=1)
     )
@@ -312,18 +286,18 @@ def tip_list(tips: list):
 # ════════════════════════════════════════════════════════════════════
 
 def meal_tag(label: str):
-    """Blue pill tag for meal sections (Breakfast, Lunch, etc.)."""
+    """Gradient pill tag for meal sections."""
     icons = {
-        "breakfast":    "🌅",
-        "mid-morning":  "☕",
-        "morning":      "☕",
-        "lunch":        "☀️",
-        "afternoon":    "🍱",
-        "evening snack":"🍎",
-        "evening":      "🍎",
-        "snack":        "🍎",
-        "snacks":       "🍎",
-        "dinner":       "🌙",
+        "breakfast":     "🌅",
+        "mid-morning":   "☕",
+        "morning":       "☕",
+        "lunch":         "☀️",
+        "afternoon":     "🍱",
+        "evening snack": "🍎",
+        "evening":       "🍎",
+        "snack":         "🍎",
+        "snacks":        "🍎",
+        "dinner":        "🌙",
     }
     ico = icons.get(label.lower(), "🍽️")
     st.markdown(
@@ -340,42 +314,44 @@ def welcome_screen():
     """Landing screen shown before the first analysis."""
     st.markdown(
         "<div class='welcome-banner animate-in'>"
-        "<span class='welcome-icon'>&#128075;</span>"
-        "<div>"
-        "<p class='welcome-title'>Welcome to Smart Health Dashboard</p>"
-        "<p class='welcome-body'>"
-        "Complete the health assessment form below, then press "
-        "<strong>Analyse My Health</strong> to receive your "
-        "personalised disease risk assessment, nutrition plan, and meal recommendations."
-        "</p>"
-        "</div>"
+        "  <span class='welcome-icon'>&#128075;</span>"
+        "  <div class='welcome-content'>"
+        "    <p class='welcome-title'>Welcome to Smart Health Dashboard</p>"
+        "    <p class='welcome-body'>"
+        "      Complete the health assessment form, then press "
+        "      <strong>Analyse My Health</strong> to receive your "
+        "      personalised disease risk assessment, nutrition plan, and meal recommendations."
+        "    </p>"
+        "  </div>"
         "</div>",
         unsafe_allow_html=True,
     )
 
     st.markdown(
         "<div class='how-it-works'>"
-        "<div class='hiw-step'>"
-        "  <span class='hiw-num'>1</span>"
-        "  <div class='hiw-icon'>&#128221;</div>"
-        "  <p class='hiw-title'>Enter Details</p>"
-        "  <p class='hiw-body'>Fill in personal info, medical parameters &amp; health goals</p>"
-        "</div>"
-        "<div class='hiw-step'>"
-        "  <span class='hiw-num'>2</span>"
-        "  <div class='hiw-icon'>&#129504;</div>"
-        "  <p class='hiw-title'>Run Analysis</p>"
-        "  <p class='hiw-body'>AI models evaluate disease risk &amp; calculate nutrition needs</p>"
-        "</div>"
-        "<div class='hiw-step'>"
-        "  <span class='hiw-num'>3</span>"
-        "  <div class='hiw-icon'>&#128202;</div>"
-        "  <p class='hiw-title'>View Results</p>"
-        "  <p class='hiw-body'>Explore predictions, charts, meal plans &amp; export your report</p>"
-        "</div>"
+        "  <div class='hiw-step'>"
+        "    <span class='hiw-num'>1</span>"
+        "    <div class='hiw-icon'>&#128221;</div>"
+        "    <p class='hiw-title'>Enter Details</p>"
+        "    <p class='hiw-body'>Fill in personal info, medical parameters &amp; health goals</p>"
+        "  </div>"
+        "  <div class='hiw-step'>"
+        "    <span class='hiw-num'>2</span>"
+        "    <div class='hiw-icon'>&#129504;</div>"
+        "    <p class='hiw-title'>Run Analysis</p>"
+        "    <p class='hiw-body'>AI models evaluate disease risk &amp; calculate your nutrition needs</p>"
+        "  </div>"
+        "  <div class='hiw-step'>"
+        "    <span class='hiw-num'>3</span>"
+        "    <div class='hiw-icon'>&#128202;</div>"
+        "    <p class='hiw-title'>View Results</p>"
+        "    <p class='hiw-body'>Explore predictions, charts, meal plans &amp; export your report</p>"
+        "  </div>"
         "</div>",
         unsafe_allow_html=True,
     )
+
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3, gap="large")
     tiles = [
@@ -390,12 +366,12 @@ def welcome_screen():
         with col:
             st.markdown(
                 f"<div class='feature-tile animate-in'>"
-                f"<div class='feature-tile-icon'>{ico}</div>"
-                f"<p class='feature-tile-title'>{ttl}</p>"
-                f"<p class='feature-tile-body'>{body}</p>"
+                f"  <div class='feature-tile-icon'>{ico}</div>"
+                f"  <p class='feature-tile-title'>{ttl}</p>"
+                f"  <p class='feature-tile-body'>{body}</p>"
                 f"</div>",
-        unsafe_allow_html=True,
-    )
+                unsafe_allow_html=True,
+            )
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -404,41 +380,41 @@ def welcome_screen():
 
 def sidebar_user_chip(display_name: str):
     """Styled user identity chip for the sidebar."""
-    initial = (display_name.strip()[0].upper() if display_name.strip() else "U")
+    initial = display_name.strip()[0].upper() if display_name.strip() else "U"
     st.markdown(
         f"<div class='user-chip'>"
-        f"<div class='user-chip-avatar'>{initial}</div>"
-        f"<div class='user-chip-info'>"
-        f"<p class='user-chip-label'>Signed in as</p>"
-        f"<p class='user-chip-name'>{display_name}</p>"
-        f"</div>"
+        f"  <div class='user-chip-avatar'>{initial}</div>"
+        f"  <div class='user-chip-info'>"
+        f"    <p class='user-chip-label'>Signed in as</p>"
+        f"    <p class='user-chip-name'>{display_name}</p>"
+        f"  </div>"
         f"</div>",
         unsafe_allow_html=True,
     )
 
 
 # ════════════════════════════════════════════════════════════════════
-#  FORM PROGRESS STEPPER
+#  FORM PROGRESS STEPPER (legacy — kept for compat)
 # ════════════════════════════════════════════════════════════════════
 
 def form_progress_steps():
     """Visual 3-step guide above the health assessment form."""
     st.markdown(
         "<div class='form-steps animate-in'>"
-        "<div class='form-step active'>"
-        "  <span class='form-step-num'>1</span>"
-        "  <span class='form-step-label'>Personal Info</span>"
-        "</div>"
-        "<div class='form-step-connector'></div>"
-        "<div class='form-step active'>"
-        "  <span class='form-step-num'>2</span>"
-        "  <span class='form-step-label'>Medical Data</span>"
-        "</div>"
-        "<div class='form-step-connector'></div>"
-        "<div class='form-step active'>"
-        "  <span class='form-step-num'>3</span>"
-        "  <span class='form-step-label'>Goals &amp; Settings</span>"
-        "</div>"
+        "  <div class='form-step active'>"
+        "    <span class='form-step-num'>1</span>"
+        "    <span class='form-step-label'>Personal Info</span>"
+        "  </div>"
+        "  <div class='form-step-connector'></div>"
+        "  <div class='form-step active'>"
+        "    <span class='form-step-num'>2</span>"
+        "    <span class='form-step-label'>Medical Data</span>"
+        "  </div>"
+        "  <div class='form-step-connector'></div>"
+        "  <div class='form-step active'>"
+        "    <span class='form-step-num'>3</span>"
+        "    <span class='form-step-label'>Goals &amp; Settings</span>"
+        "  </div>"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -454,33 +430,40 @@ def dashboard_stats_strip(
     tdee: float,
     diseases: list,
 ):
-    """Horizontal summary bar shown above dashboard tabs after analysis."""
-    _risk = "Normal" if diseases == ["Normal"] else ", ".join(diseases)
+    """Four-pill horizontal summary bar above the dashboard results."""
+    _risk_text = "Healthy" if diseases == ["Normal"] else ", ".join(diseases)
     _risk_icon = "✅" if diseases == ["Normal"] else "⚠️"
-    _risk_bg = "#F0FDF4" if diseases == ["Normal"] else "#FFFBEB"
+    _risk_bg   = "#ECFDF5" if diseases == ["Normal"] else "#FFFBEB"
+
     _bmi_color = (
-        "#16A34A" if "normal" in bmi_cat.lower() else
+        "#059669" if "normal"     in bmi_cat.lower() else
         "#D97706" if "overweight" in bmi_cat.lower() else
-        "#DC2626" if "obese" in bmi_cat.lower() else
+        "#DC2626" if "obese"      in bmi_cat.lower() else
         "#0284C7"
     )
 
     st.markdown(
         f"<div class='stats-strip animate-in'>"
+
+        # BMI pill
         f"<div class='stat-pill'>"
-        f"  <div class='stat-pill-icon' style='background:#EFF6FF;'>⚖️</div>"
+        f"  <div class='stat-pill-icon' style='background:#EBF0FF;'>⚖️</div>"
         f"  <div class='stat-pill-body'>"
         f"    <p class='stat-pill-label'>BMI</p>"
         f"    <p class='stat-pill-value' style='color:{_bmi_color};'>{bmi:.1f}</p>"
         f"  </div>"
         f"</div>"
+
+        # Category pill
         f"<div class='stat-pill'>"
-        f"  <div class='stat-pill-icon' style='background:#F0FDF4;'>🏷️</div>"
+        f"  <div class='stat-pill-icon' style='background:#EBF0FF;'>🏷️</div>"
         f"  <div class='stat-pill-body'>"
         f"    <p class='stat-pill-label'>Category</p>"
-        f"    <p class='stat-pill-value' style='font-size:0.92rem!important;'>{bmi_cat}</p>"
+        f"    <p class='stat-pill-value'>{bmi_cat}</p>"
         f"  </div>"
         f"</div>"
+
+        # Calories pill
         f"<div class='stat-pill'>"
         f"  <div class='stat-pill-icon' style='background:#FFFBEB;'>🔥</div>"
         f"  <div class='stat-pill-body'>"
@@ -488,13 +471,16 @@ def dashboard_stats_strip(
         f"    <p class='stat-pill-value'>{tdee:.0f} kcal</p>"
         f"  </div>"
         f"</div>"
+
+        # Risk pill
         f"<div class='stat-pill'>"
         f"  <div class='stat-pill-icon' style='background:{_risk_bg};'>{_risk_icon}</div>"
         f"  <div class='stat-pill-body'>"
         f"    <p class='stat-pill-label'>Risk Status</p>"
-        f"    <p class='stat-pill-value' style='font-size:0.88rem!important;'>{_risk}</p>"
+        f"    <p class='stat-pill-value'>{_risk_text}</p>"
         f"  </div>"
         f"</div>"
+
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -505,145 +491,16 @@ def dashboard_stats_strip(
 # ════════════════════════════════════════════════════════════════════
 
 def page_footer():
-    """Minimal branded footer at the bottom of the page."""
+    """Minimal branded footer."""
     st.markdown(
         "<div class='page-footer'>"
-        "<p class='page-footer-text'>"
-        "Smart Health Dashboard &mdash; AI-Powered Nutrition &amp; Disease Risk Analysis"
-        "</p>"
-        "<span class='page-footer-badge'>&#129338; Healthcare AI</span>"
+        "  <p class='page-footer-text'>"
+        "    Smart Health Dashboard &mdash; AI-Powered Nutrition &amp; Disease Risk Analysis"
+        "  </p>"
+        "  <span class='page-footer-badge'>&#129338; Healthcare AI</span>"
         "</div>",
         unsafe_allow_html=True,
     )
-
-
-# ════════════════════════════════════════════════════════════════════
-#  PLOTLY HELPERS
-# ════════════════════════════════════════════════════════════════════
-
-# Blue-based chart palette
-_BLUE_PALETTE = ["#2563EB", "#0EA5E9", "#38BDF8", "#7DD3FC", "#BAE6FD",
-                 "#1E3A8A", "#1D4ED8", "#3B82F6", "#60A5FA", "#93C5FD"]
-
-
-def _theme(fig, height: int = 260):
-    """Apply clean white background and Inter font to a Plotly figure."""
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, Plus Jakarta Sans, sans-serif",
-                  size=12, color="#334155"),
-        margin=dict(t=40, b=25, l=20, r=20),
-        height=height,
-    )
-    return fig
-
-
-def chart_bmi_gauge(bmi: float):
-    """Gauge chart visualising BMI against WHO thresholds."""
-    if bmi < 18.5:
-        color = "#0EA5E9"      # sky blue — underweight
-    elif bmi < 25:
-        color = "#16A34A"      # green — healthy
-    elif bmi < 30:
-        color = "#F59E0B"      # amber — overweight
-    else:
-        color = "#DC2626"      # red — obese
-
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=bmi,
-        delta={"reference": 22, "valueformat": ".1f",
-               "increasing": {"color": "#DC2626"},
-               "decreasing": {"color": "#16A34A"}},
-        number={"valueformat": ".1f",
-                "font": {"size": 34, "color": "#0F172A"}},
-        title={"text": "Body Mass Index (BMI)",
-               "font": {"size": 13, "color": "#64748B"}},
-        gauge={
-            "axis": {
-                "range": [10, 40],
-                "tickwidth": 1, "tickcolor": "#E2E8F0",
-                "tickvals": [10, 18.5, 25, 30, 40],
-                "ticktext": ["10", "18.5", "25", "30", "40"],
-                "tickfont": {"size": 10},
-            },
-            "bar": {"color": color, "thickness": 0.25},
-            "bgcolor": "rgba(0,0,0,0)", "borderwidth": 0,
-            "steps": [
-                {"range": [10,   18.5], "color": "rgba(14,165,233,.12)"},
-                {"range": [18.5, 25],   "color": "rgba(22,163,74,.12)"},
-                {"range": [25,   30],   "color": "rgba(245,158,11,.12)"},
-                {"range": [30,   40],   "color": "rgba(220,38,38,.12)"},
-            ],
-            "threshold": {"line": {"color": color, "width": 4},
-                          "thickness": 0.8, "value": bmi},
-        },
-    ))
-    fig = _theme(fig, height=270)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def chart_disease_risk(score: float, title: str = "Risk Score"):
-    """0-100% gauge for generic disease risk."""
-    pct = score * 100
-    color = "#16A34A" if pct < 33 else ("#F59E0B" if pct < 66 else "#DC2626")
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=pct,
-        number={"suffix": "%", "valueformat": ".0f",
-                "font": {"size": 30, "color": "#0F172A"}},
-        title={"text": title, "font": {"size": 13, "color": "#64748B"}},
-        gauge={
-            "axis": {"range": [0, 100],
-                     "tickwidth": 1, "tickcolor": "#E2E8F0"},
-            "bar": {"color": color, "thickness": 0.25},
-            "bgcolor": "rgba(0,0,0,0)", "borderwidth": 0,
-            "steps": [
-                {"range": [0,  33], "color": "rgba(22,163,74,.12)"},
-                {"range": [33, 66], "color": "rgba(245,158,11,.12)"},
-                {"range": [66,100], "color": "rgba(220,38,38,.12)"},
-            ],
-        },
-    ))
-    fig = _theme(fig, height=240)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def chart_macronutrient(df: pd.DataFrame):
-    """Donut chart for macronutrient split. Columns: ['macro','grams']."""
-    fig = px.pie(df, names="macro", values="grams", hole=0.5,
-                 color_discrete_sequence=_BLUE_PALETTE)
-    fig.update_traces(
-        textposition="outside",
-        textinfo="label+percent",
-        textfont_size=12,
-        pull=[0.03] * len(df),
-    )
-    fig = _theme(fig, height=320)
-    fig.update_layout(
-        showlegend=True,
-        legend=dict(orientation="h", y=-0.18, font=dict(size=12)),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def chart_calorie_breakdown(df: pd.DataFrame):
-    """Horizontal bar chart. Columns: ['meal','calories']."""
-    fig = px.bar(df, x="calories", y="meal", orientation="h",
-                 text="calories", color="meal",
-                 color_discrete_sequence=_BLUE_PALETTE)
-    fig.update_traces(
-        texttemplate="%{text} kcal", textposition="outside",
-        textfont_size=11,
-    )
-    fig.update_layout(
-        xaxis_title="Calories (kcal)", yaxis_title="",
-        showlegend=False,
-        yaxis={"categoryorder": "total ascending"},
-    )
-    fig = _theme(fig, height=260)
-    st.plotly_chart(fig, use_container_width=True)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -651,14 +508,7 @@ def chart_calorie_breakdown(df: pd.DataFrame):
 # ════════════════════════════════════════════════════════════════════
 
 def download_button(data, filename: str = "report", format: str = "json"):
-    """Render a download button for JSON, CSV, or PDF formats.
-
-    Parameters
-    ----------
-    data     : dict or pd.DataFrame
-    filename : base filename without extension
-    format   : 'json' | 'csv' | 'pdf'
-    """
+    """Render a styled download button for JSON, CSV, or PDF."""
 
     def _serialize(obj):
         if isinstance(obj, pd.DataFrame):
@@ -669,7 +519,7 @@ def download_button(data, filename: str = "report", format: str = "json"):
             return [_serialize(i) for i in obj]
         return obj
 
-    # ── JSON ─────────────────────────────────────────────────────────
+    # ── JSON ──────────────────────────────────────────────────────────
     if format == "json":
         payload = json.dumps(_serialize(data), indent=2)
         st.download_button(
@@ -680,7 +530,7 @@ def download_button(data, filename: str = "report", format: str = "json"):
             use_container_width=True,
         )
 
-    # ── CSV ──────────────────────────────────────────────────────────
+    # ── CSV ───────────────────────────────────────────────────────────
     elif format == "csv":
         csv_str = (
             data.to_csv(index=False)
@@ -695,7 +545,7 @@ def download_button(data, filename: str = "report", format: str = "json"):
             use_container_width=True,
         )
 
-    # ── PDF ──────────────────────────────────────────────────────────
+    # ── PDF ───────────────────────────────────────────────────────────
     elif format == "pdf":
         from fpdf import FPDF
 
@@ -734,8 +584,7 @@ def download_button(data, filename: str = "report", format: str = "json"):
                 if isinstance(v, dict):
                     pdf_obj.set_font("Arial", "B", 11)
                     pdf_obj.set_fill_color(239, 246, 255)
-                    pdf_obj.multi_cell(0, 8, _safe(str(k)),
-                                       fill=(indent == 0))
+                    pdf_obj.multi_cell(0, 8, _safe(str(k)), fill=(indent == 0))
                     pdf_obj.set_font("Arial", size=10)
                     _write(pdf_obj, v, indent + 1)
                 elif isinstance(v, list):
@@ -762,16 +611,11 @@ def download_button(data, filename: str = "report", format: str = "json"):
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
 
-        # Title block
         pdf.set_font("Arial", "B", 18)
-        pdf.cell(0, 12,
-                 _safe("Smart Health Dashboard — Health Report"),
-                 ln=True, align="C")
+        pdf.cell(0, 12, _safe("Smart Health Dashboard — Health Report"), ln=True, align="C")
         pdf.set_font("Arial", size=10)
         pdf.set_text_color(100, 116, 139)
-        pdf.cell(0, 8,
-                 _safe("AI-Powered Personalised Nutrition & Disease Risk Analysis"),
-                 ln=True, align="C")
+        pdf.cell(0, 8, _safe("AI-Powered Personalised Nutrition & Disease Risk Analysis"), ln=True, align="C")
         pdf.set_text_color(0, 0, 0)
         pdf.ln(4)
         pdf.set_draw_color(226, 232, 240)
@@ -803,30 +647,195 @@ def download_button(data, filename: str = "report", format: str = "json"):
 
 
 # ════════════════════════════════════════════════════════════════════
-#  XAI — FEATURE IMPORTANCE CHART  (full-width Plotly, no expander)
+#  PLOTLY HELPERS
+# ════════════════════════════════════════════════════════════════════
+
+# Blue-based chart palette — consistent across all charts
+_BLUE_PALETTE = [
+    "#1A56DB", "#0EA5E9", "#38BDF8", "#7DD3FC", "#BAE6FD",
+    "#1E3A8A", "#1D4ED8", "#3B82F6", "#60A5FA", "#93C5FD",
+]
+
+
+def _theme(fig, height: int = 260):
+    """Apply clean white background and Inter font to a Plotly figure."""
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, Plus Jakarta Sans, sans-serif",
+                  size=12, color="#334155"),
+        margin=dict(t=36, b=28, l=16, r=16),
+        height=height,
+    )
+    return fig
+
+
+def chart_bmi_gauge(bmi: float):
+    """Gauge chart visualising BMI against WHO thresholds."""
+    if bmi < 18.5:
+        color = "#0EA5E9"
+    elif bmi < 25:
+        color = "#059669"
+    elif bmi < 30:
+        color = "#F59E0B"
+    else:
+        color = "#DC2626"
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=bmi,
+        delta={
+            "reference": 22,
+            "valueformat": ".1f",
+            "increasing": {"color": "#DC2626"},
+            "decreasing": {"color": "#059669"},
+        },
+        number={
+            "valueformat": ".1f",
+            "font": {"size": 32, "color": "#0F172A"},
+        },
+        title={
+            "text": "Body Mass Index (BMI)",
+            "font": {"size": 12, "color": "#64748B"},
+        },
+        gauge={
+            "axis": {
+                "range": [10, 40],
+                "tickwidth": 1,
+                "tickcolor": "#E2E8F0",
+                "tickvals": [10, 18.5, 25, 30, 40],
+                "ticktext": ["10", "18.5", "25", "30", "40"],
+                "tickfont": {"size": 10},
+            },
+            "bar": {"color": color, "thickness": 0.24},
+            "bgcolor": "rgba(0,0,0,0)",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [10,   18.5], "color": "rgba(14,165,233,.10)"},
+                {"range": [18.5, 25],   "color": "rgba(5,150,105,.10)"},
+                {"range": [25,   30],   "color": "rgba(245,158,11,.10)"},
+                {"range": [30,   40],   "color": "rgba(220,38,38,.10)"},
+            ],
+            "threshold": {
+                "line": {"color": color, "width": 4},
+                "thickness": 0.75,
+                "value": bmi,
+            },
+        },
+    ))
+    fig = _theme(fig, height=265)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def chart_disease_risk(score: float, title: str = "Risk Score"):
+    """0-100% gauge for generic disease risk."""
+    pct = score * 100
+    color = "#059669" if pct < 33 else ("#F59E0B" if pct < 66 else "#DC2626")
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=pct,
+        number={
+            "suffix": "%",
+            "valueformat": ".0f",
+            "font": {"size": 28, "color": "#0F172A"},
+        },
+        title={"text": title, "font": {"size": 12, "color": "#64748B"}},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#E2E8F0"},
+            "bar": {"color": color, "thickness": 0.24},
+            "bgcolor": "rgba(0,0,0,0)",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [0,  33], "color": "rgba(5,150,105,.10)"},
+                {"range": [33, 66], "color": "rgba(245,158,11,.10)"},
+                {"range": [66,100], "color": "rgba(220,38,38,.10)"},
+            ],
+        },
+    ))
+    fig = _theme(fig, height=235)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def chart_macronutrient(df: pd.DataFrame):
+    """Donut chart for macronutrient split. Columns: ['macro','grams']."""
+    fig = px.pie(
+        df, names="macro", values="grams", hole=0.52,
+        color_discrete_sequence=_BLUE_PALETTE,
+    )
+    fig.update_traces(
+        textposition="outside",
+        textinfo="label+percent",
+        textfont_size=11,
+        pull=[0.03] * len(df),
+        marker=dict(line=dict(color="#FFFFFF", width=2)),
+    )
+    fig = _theme(fig, height=315)
+    fig.update_layout(
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            y=-0.20,
+            font=dict(size=11),
+            itemsizing="constant",
+        ),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def chart_calorie_breakdown(df: pd.DataFrame):
+    """Horizontal bar chart. Columns: ['meal','calories']."""
+    fig = px.bar(
+        df, x="calories", y="meal", orientation="h",
+        text="calories", color="meal",
+        color_discrete_sequence=_BLUE_PALETTE,
+    )
+    fig.update_traces(
+        texttemplate="%{text:.0f} kcal",
+        textposition="outside",
+        textfont_size=11,
+        marker_line_width=0,
+        cliponaxis=False,
+    )
+    fig.update_layout(
+        xaxis=dict(
+            title="Calories (kcal)",
+            showgrid=True,
+            gridcolor="rgba(203,213,225,.35)",
+            zeroline=False,
+        ),
+        yaxis=dict(title="", categoryorder="total ascending"),
+        showlegend=False,
+    )
+    fig = _theme(fig, height=260)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  XAI — FEATURE IMPORTANCE CHART
 # ════════════════════════════════════════════════════════════════════
 
 def chart_xai_feature_importance(feature_rows: list, disease_name: str = "") -> None:
-    """Render a full-width horizontal Plotly bar chart of feature importances."""
+    """Full-width horizontal Plotly bar chart of feature importances."""
     if not feature_rows:
         return
 
     _impact_colour = {
         "High":   "#DC2626",
         "Medium": "#F59E0B",
-        "Low":    "#16A34A",
+        "Low":    "#059669",
     }
 
     rows_display = list(reversed(feature_rows))
-    labels  = [r.feature for r in rows_display]
-    scores  = [round(r.importance * 100, 2) for r in rows_display]
-    colours = [_impact_colour.get(r.impact, "#2563EB") for r in rows_display]
-    hover   = [
+    labels   = [r.feature for r in rows_display]
+    scores   = [round(r.importance * 100, 2) for r in rows_display]
+    colours  = [_impact_colour.get(r.impact, "#1A56DB") for r in rows_display]
+    hover    = [
         f"<b>{r.feature}</b><br>Value: {r.value}<br>"
         f"Status: {r.direction}<br>Impact: {r.impact}"
         for r in rows_display
     ]
-    outside_text = [f"{r.value}" for r in rows_display]
+    out_text = [f"{r.value}" for r in rows_display]
 
     fig = go.Figure(go.Bar(
         x=scores,
@@ -836,7 +845,7 @@ def chart_xai_feature_importance(feature_rows: list, disease_name: str = "") -> 
         marker_line_width=0,
         hovertemplate=hover,
         hoverinfo="text",
-        text=outside_text,
+        text=out_text,
         textposition="outside",
         textfont=dict(size=11, color="#475569"),
         cliponaxis=False,
@@ -846,21 +855,18 @@ def chart_xai_feature_importance(feature_rows: list, disease_name: str = "") -> 
     fig.update_layout(
         xaxis=dict(
             title="Contribution Score",
-            range=[0, max_score * 1.60],
+            range=[0, max_score * 1.55],
             showgrid=True,
-            gridcolor="rgba(203,213,225,0.4)",
+            gridcolor="rgba(203,213,225,.38)",
             zeroline=False,
             tickfont=dict(size=10),
         ),
-        yaxis=dict(
-            tickfont=dict(size=12),
-            automargin=True,
-        ),
+        yaxis=dict(tickfont=dict(size=11), automargin=True),
         showlegend=False,
-        bargap=0.30,
-        margin=dict(l=10, r=10, t=10, b=30),
+        bargap=0.28,
+        margin=dict(l=8, r=12, t=8, b=28),
     )
-    fig = _theme(fig, height=max(160, len(feature_rows) * 46))
+    fig = _theme(fig, height=max(155, len(feature_rows) * 44))
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -869,12 +875,12 @@ def chart_xai_feature_importance(feature_rows: list, disease_name: str = "") -> 
 # ════════════════════════════════════════════════════════════════════
 
 def xai_explanation_panel(xai_result, disease_name: str = "") -> None:
-    """Render the XAI explanation panel for one disease — inline, no expander.
+    """Render the XAI explanation panel for one disease — full-width, no expander.
 
-    Layout (all full-width, no columns):
+    Layout:
       1. Method note
-      2. Legend (High / Medium / Low chips)
-      3. HTML feature-bar rows  (pure CSS bars)
+      2. Impact legend
+      3. HTML feature-bar rows (pure CSS)
       4. Plotly horizontal bar chart
       5. Patient-friendly summary box
       6. Disclaimer
@@ -892,30 +898,26 @@ def xai_explanation_panel(xai_result, disease_name: str = "") -> None:
         st.info("No feature data available.")
         return
 
-    # ── 1. Method note ────────────────────────────────────────────────
+    # 1. Method note
     st.markdown(
         f"<div class='xai-method-note'>"
         f"<strong>Method:</strong> {xai_result.method}. "
-        "Each score = model feature weight × how far your value deviates from "
-        "the clinical reference range."
+        "Each score = model feature weight × deviation from the clinical reference range."
         "</div>",
         unsafe_allow_html=True,
     )
 
-    # ── 2. Legend ─────────────────────────────────────────────────────
+    # 2. Legend
     st.markdown(
         "<div class='xai-legend'>"
-        "<span class='xai-legend-item'>"
-        "<span class='xai-legend-dot high'></span>High impact</span>"
-        "<span class='xai-legend-item'>"
-        "<span class='xai-legend-dot medium'></span>Medium impact</span>"
-        "<span class='xai-legend-item'>"
-        "<span class='xai-legend-dot low'></span>Low impact</span>"
+        "  <span class='xai-legend-item'><span class='xai-legend-dot high'></span>High impact</span>"
+        "  <span class='xai-legend-item'><span class='xai-legend-dot medium'></span>Medium impact</span>"
+        "  <span class='xai-legend-item'><span class='xai-legend-dot low'></span>Low impact</span>"
         "</div>",
         unsafe_allow_html=True,
     )
 
-    # ── 3. HTML feature rows (pure CSS bars) ──────────────────────────
+    # 3. HTML feature rows
     max_score = max(r.importance for r in rows) or 1.0
     _dir_class = {
         "↑ Above normal": "above",
@@ -930,10 +932,10 @@ def xai_explanation_panel(xai_result, disease_name: str = "") -> None:
 
     row_html = ""
     for r in rows:
-        pct      = round(r.importance / max_score * 100, 1)
-        imp_cls  = r.impact.lower()
-        dir_cls  = _dir_class.get(r.direction, "normal")
-        dir_lbl  = _dir_label.get(r.direction, r.direction)
+        pct     = round(r.importance / max_score * 100, 1)
+        imp_cls = r.impact.lower()
+        dir_cls = _dir_class.get(r.direction, "normal")
+        dir_lbl = _dir_label.get(r.direction, r.direction)
         row_html += (
             f"<div class='xai-feature-row'>"
             f"  <span class='xai-feat-name'>{r.feature}</span>"
@@ -950,17 +952,17 @@ def xai_explanation_panel(xai_result, disease_name: str = "") -> None:
         unsafe_allow_html=True,
     )
 
-    # ── 4. Plotly chart ────────────────────────────────────────────────
+    # 4. Plotly chart
     chart_xai_feature_importance(rows, disease_name)
 
-    # ── 5. Summary ────────────────────────────────────────────────────
+    # 5. Summary
     if xai_result.summary:
         st.markdown(
             f"<div class='xai-summary'>💡 {xai_result.summary}</div>",
             unsafe_allow_html=True,
         )
 
-    # ── 6. Disclaimer ─────────────────────────────────────────────────
+    # 6. Disclaimer
     st.markdown(
         "<div class='xai-disclaimer'>"
         "⚠️ This is a screening result only. It does not constitute a medical "
@@ -970,56 +972,83 @@ def xai_explanation_panel(xai_result, disease_name: str = "") -> None:
     )
 
 
-def food_item_card(food_name: str, calories: float, protein: float = None,
-                   carbs: float = None, fat: float = None, fiber: float = None,
-                   meal_type: str = "", food_index: int = 0, show_swap: bool = False):
-    """Render a food item card with nutrition info.
-    
-    Parameters
-    ----------
-    food_name : str
-        Name of the food item.
-    calories : float
-        Calorie content in kcal.
-    protein : float, optional
-        Protein content in grams.
-    carbs : float, optional
-        Carbohydrate content in grams.
-    fat : float, optional
-        Fat content in grams.
-    fiber : float, optional
-        Fiber content in grams.
-    meal_type : str
-        Type of meal (e.g., 'Breakfast', 'Lunch').
-    food_index : int
-        Index of the food item in the meal list.
-    show_swap : bool
-        Whether to show swap button.
+# ════════════════════════════════════════════════════════════════════
+#  FOOD ITEM CARD
+# ════════════════════════════════════════════════════════════════════
+
+def food_item_card(
+    food_name: str,
+    calories: float,
+    protein: float = None,
+    carbs: float = None,
+    fat: float = None,
+    fiber: float = None,
+    meal_type: str = "",
+    food_index: int = 0,
+    show_swap: bool = False,
+) -> bool:
+    """Render a food item card with nutrition info. Returns True if swap clicked.
+
+    Uses a clean HTML card for the name/calories row to avoid overlap,
+    then Streamlit columns only for the swap button.
     """
-    # Use Streamlit's native components for better rendering
-    col_name, col_cal, col_swap = st.columns([3, 1, 1])
-    with col_name:
-        st.markdown(f"**{food_name}**")
-    with col_cal:
-        st.markdown(f"<span style='color: #2563EB; font-weight: 500;'>{calories:.0f} kcal</span>", unsafe_allow_html=True)
-    with col_swap:
-        if show_swap:
-            button_key = f"swap_{meal_type}_{food_index}_{food_name.replace(' ', '_')}"
-            if st.button("🔄 Swap", key=button_key, help="Find alternative food"):
-                return True
-    
-    # Show nutrition info if available
-    nutrition_info = []
+    # Build nutrition chips HTML
+    chips = []
     if protein is not None and protein > 0:
-        nutrition_info.append(f"🥩 {protein:.1f}g")
+        chips.append(f"<span class='nutrient-item'>🥩&nbsp;Protein: {protein:.1f}g</span>")
     if carbs is not None and carbs > 0:
-        nutrition_info.append(f"🍞 {carbs:.1f}g")
+        chips.append(f"<span class='nutrient-item'>🍞&nbsp;Carbs: {carbs:.1f}g</span>")
     if fat is not None and fat > 0:
-        nutrition_info.append(f"🥑 {fat:.1f}g")
+        chips.append(f"<span class='nutrient-item'>🥑&nbsp;Fat: {fat:.1f}g</span>")
     if fiber is not None and fiber > 0:
-        nutrition_info.append(f"🌾 {fiber:.1f}g")
-    
-    if nutrition_info:
-        st.markdown(f"<small style='color: #64748B;'>{' • '.join(nutrition_info)}</small>", unsafe_allow_html=True)
-    
+        chips.append(f"<span class='nutrient-item'>🌾&nbsp;Fibre: {fiber:.1f}g</span>")
+    nutrition_html = (
+        f"<div class='food-item-nutrition'>{''.join(chips)}</div>"
+        if chips else ""
+    )
+
+    if show_swap:
+        # Use columns only when there's a swap button
+        col_card, col_btn = st.columns([5, 1], gap="small")
+        with col_card:
+            st.markdown(
+                f"<div class='food-item-card'>"
+                f"  <div class='food-item-header'>"
+                f"    <span class='food-item-name'>{food_name}</span>"
+                f"    <span class='food-item-calories'>{calories:.0f} kcal</span>"
+                f"  </div>"
+                f"  {nutrition_html}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with col_btn:
+            # Vertical padding to align button with card
+            st.markdown("<div style='margin-top:0.55rem'></div>", unsafe_allow_html=True)
+            button_key = (
+                f"swap_{meal_type}_{food_index}_{food_name.replace(' ', '_')[:20]}"
+            )
+            if st.button("🔄", key=button_key, help=f"Find alternatives for {food_name}"):
+                return True
+    else:
+        # Pure HTML card — no columns, no overlap risk
+        st.markdown(
+            f"<div class='food-item-card'>"
+            f"  <div class='food-item-header'>"
+            f"    <span class='food-item-name'>{food_name}</span>"
+            f"    <span class='food-item-calories'>{calories:.0f} kcal</span>"
+            f"  </div>"
+            f"  {nutrition_html}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
     return False
+
+
+# ════════════════════════════════════════════════════════════════════
+#  SECTION DIVIDER HELPER (convenience)
+# ════════════════════════════════════════════════════════════════════
+
+def section_divider():
+    """Renders a subtle full-width horizontal rule between sections."""
+    st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
