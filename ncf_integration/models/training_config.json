@@ -1,0 +1,12 @@
+{
+  "batch_size": 256,
+  "epochs": 50,
+  "validation_split": 0.2,
+  "learning_rate": 0.001,
+  "train_samples": 33299,
+  "val_samples": 9514,
+  "test_samples": 4757,
+  "training_date": "2026-09-09T14:30:42.896992",
+  "final_train_loss": 0.04746643081307411,
+  "final_val_loss": 0.09435949474573135
+}

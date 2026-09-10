@@ -68,10 +68,87 @@ def generate_comprehensive_recommendations(
     if isinstance(diseases, str):
         diseases = [diseases]
     
-    # Use unified recommendation service as primary
+    # ── Primary: Enhanced recommender (hybrid_score pipeline) ───────────
+    # This path MUST run first because it is the only one that computes
+    # hybrid_score (nutrition × severity-suitability blend + content score)
+    # and ranks candidates by that score before top-N selection.
+    # The unified RecommendationService below uses a simpler score that
+    # ignores content and severity suitability, so it must only be used
+    # as a fallback when the enhanced recommender is unavailable or fails.
+    if ENHANCED_RECOMMENDER_AVAILABLE:
+        try:
+            print("Using enhanced recommender (hybrid scoring)...")
+            user_profile = {
+                'diseases': diseases,
+                'age': age,
+                'gender': gender,
+                'height': height,
+                'weight': weight,
+                'bmi': bmi,
+                'activity_level': activity_level,
+                'daily_calories': daily_calories,
+                'hba1c': hba1c,
+                'glucose': glucose,
+                'bp': bp,
+                'sodium': sodium,
+                'potassium': potassium,
+                'creatinine': creatinine,
+                'goal': goal or 'Weight Loss',
+                'region': region or 'Andhra Pradesh',
+                'severity': severity or {},  # pass severity dict into recommender
+            }
+            result = generate_enhanced_recommendations(user_profile)
+
+            # Convert pd.Series food items to plain dicts for the UI
+            meal_plan = {}
+            for meal_type, foods in result['meal_plan'].items():
+                meal_plan[meal_type] = [f.to_dict() if isinstance(f, pd.Series) else f for f in foods]
+
+            # ── Compute foods_to_avoid / water / protein / tips ───────────
+            # These are not produced by the enhanced recommender itself.
+            # Use the existing IntelligentNutritionRecommender helpers which
+            # are already tested and contain disease-specific logic.
+            try:
+                from recommendation import IntelligentNutritionRecommender as _INR
+                _rec = _INR()
+                _foods_to_avoid      = _rec.get_foods_to_avoid(diseases)
+                _water_intake        = _rec.calculate_water_intake(weight, activity_level)
+                _protein_requirement = _rec.calculate_protein_requirement(weight, gender, age, diseases)
+                _nutrition_tips      = _rec.get_nutrition_tips(diseases, bmi, activity_level)
+            except Exception:
+                _foods_to_avoid      = []
+                _water_intake        = round(weight * 0.033, 2)
+                _protein_requirement = round(weight * 0.8,   1)
+                _nutrition_tips      = []
+
+            enhanced_result = {
+                'meal_plan': meal_plan,
+                'foods_to_avoid':      _foods_to_avoid,
+                'water_intake':        _water_intake,
+                'protein_requirement': _protein_requirement,
+                'nutrition_tips':      _nutrition_tips,
+                'meal_validation': {'is_valid': True, 'warnings': [], 'errors': []},
+                'use_enhanced_recommender': True,
+                'total_calories': result.get('total_calories', 0),
+                'target_calories': result.get('target_calories', daily_calories),
+                'calorie_difference': result.get('calorie_difference', 0),
+                'nutrition_summary': result.get('nutrition_summary', {}),
+                'meal_explanations': result.get('meal_explanations', {}),
+                'severity_info': result.get('severity_info', {}),
+                'scoring_info': result.get('scoring_info', {}),
+                'debug_info': result.get('debug_info', {})
+            }
+            print(f"Enhanced recommender result: meal plan with {len(enhanced_result['meal_plan'])} meals")
+            return enhanced_result
+        except Exception as e:
+            print(f"Enhanced recommender failed: {e}, falling back to unified service")
+            import traceback
+            traceback.print_exc()
+
+    # ── Fallback: unified recommendation service (simple nutrition score) ─
     if UNIFIED_SERVICE_AVAILABLE:
         try:
-            print("Using unified recommendation service...")
+            print("Using unified recommendation service (fallback)...")
             service = get_recommendation_service()
             result = service.generate_recommendations(
                 diseases=diseases,
@@ -95,59 +172,6 @@ def generate_comprehensive_recommendations(
             return result
         except Exception as e:
             print(f"Unified service failed: {e}, using fallback")
-            import traceback
-            traceback.print_exc()
-    
-    # Fallback to enhanced recommender
-    if ENHANCED_RECOMMENDER_AVAILABLE:
-        try:
-            print("Using enhanced recommender (fallback)...")
-            user_profile = {
-                'diseases': diseases,
-                'age': age,
-                'gender': gender,
-                'height': height,
-                'weight': weight,
-                'bmi': bmi,
-                'activity_level': activity_level,
-                'daily_calories': daily_calories,
-                'hba1c': hba1c,
-                'glucose': glucose,
-                'bp': bp,
-                'sodium': sodium,
-                'potassium': potassium,
-                'creatinine': creatinine,
-                'goal': goal or 'Weight Loss',
-                'region': region or 'Andhra Pradesh',
-                'severity': severity or {},  # pass severity dict into recommender
-            }
-            result = generate_enhanced_recommendations(user_profile)
-            
-            # Convert to format expected by UI
-            meal_plan = {}
-            for meal_type, foods in result['meal_plan'].items():
-                meal_plan[meal_type] = [f.to_dict() if isinstance(f, pd.Series) else f for f in foods]
-            
-            enhanced_result = {
-                'meal_plan': meal_plan,
-                'foods_to_avoid': [],
-                'water_intake': 0,
-                'protein_requirement': 0,
-                'nutrition_tips': [],
-                'meal_validation': {'is_valid': True, 'warnings': [], 'errors': []},
-                'use_enhanced_recommender': True,
-                'total_calories': result.get('total_calories', 0),
-                'target_calories': result.get('target_calories', daily_calories),
-                'calorie_difference': result.get('calorie_difference', 0),
-                'nutrition_summary': result.get('nutrition_summary', {}),
-                'meal_explanations': result.get('meal_explanations', {}),
-                'severity_info': result.get('severity_info', {}),
-                'scoring_info': result.get('scoring_info', {}),
-                'debug_info': result.get('debug_info', {})
-            }
-            return enhanced_result
-        except Exception as e:
-            print(f"Enhanced recommender failed: {e}, using fallback")
             import traceback
             traceback.print_exc()
     

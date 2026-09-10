@@ -91,25 +91,65 @@ logger = logging.getLogger(__name__)
 #  NCF availability check (unchanged from Step 4)
 # ────────────────────────────────────────────────────────────────────────────
 
-def _check_ncf_availability() -> bool:
-    """Return True only when a *trained* NCF model is confirmed available."""
+def _audit_ncf_availability() -> Tuple[bool, str]:
+    """
+    Audit whether a *compatible* NCF model AND *genuine* interaction data exist.
+
+    A keras file trained on synthetic ncf_integration/data/user_food_interactions.csv
+    is not sufficient. Genuine interactions live in healthcare.db (food_interactions)
+    and must meet interaction_service training-readiness thresholds. App users must
+    be representable in the model's user mapping (username strings, not only
+    synthetic integer ids from generate_dataset.py).
+
+    Never invent dummy interactions or fake scores.
+    """
     try:
-        import os
-        from ncf_integration.models.ncf_model import NCFModel  # noqa: F401
-        for path in [
-            "ncf_integration/models/ncf_model.pt",
-            "ncf_integration/models/ncf_model.pkl",
-            "ncf_model.pt",
-            "ncf_model.pkl",
-        ]:
-            if os.path.isfile(path) and os.path.getsize(path) > 0:
-                logger.info("NCF model found at %s — NCF scoring active.", path)
-                return True
-        logger.info("NCF model weights not found. NCF scoring is UNAVAILABLE.")
-        return False
+        from backend.services.ncf_service import is_available as ncf_model_loaded, get_status
+        from backend.services.interaction_service import get_interaction_stats
     except Exception as exc:
-        logger.info("NCF package not importable (%s). NCF scoring is UNAVAILABLE.", exc)
-        return False
+        return False, f"NCF service not importable: {exc}"
+
+    status = get_status()
+    if not ncf_model_loaded():
+        return False, status.get("load_error") or "NCF model is not loaded"
+
+    stats = get_interaction_stats()
+    if not stats.get("training_ready"):
+        return False, (
+            "Genuine food_interactions in healthcare.db are below training "
+            "thresholds; synthetic CSV interactions are not used. "
+            + str(stats.get("reason", ""))
+        )
+
+    # Synthetic generator users are integer strings "0".."N". Real app users
+    # are authenticator usernames. Require at least one non-numeric mapping key.
+    try:
+        import json
+        import os
+        mappings_path = os.path.join("ncf_integration", "models", "ncf_mappings.json")
+        with open(mappings_path, encoding="utf-8") as fh:
+            mappings = json.load(fh)
+        user_keys = [str(k) for k in (mappings.get("user_to_idx") or {}).keys()]
+        has_real_user_key = any(not k.isdigit() for k in user_keys)
+        if not has_real_user_key:
+            return False, (
+                "NCF mappings only contain synthetic numeric user ids; "
+                "not compatible with application usernames."
+            )
+    except Exception as exc:
+        return False, f"NCF mappings could not be audited: {exc}"
+
+    return True, "Compatible NCF model and genuine interaction data are available"
+
+
+def _check_ncf_availability() -> bool:
+    """Return True only when a trained, compatible NCF model can be used."""
+    available, reason = _audit_ncf_availability()
+    if available:
+        logger.info("NCF available: %s", reason)
+    else:
+        logger.info("NCF unavailable: %s", reason)
+    return available
 
 
 _NCF_AVAILABLE: bool = _check_ncf_availability()
@@ -142,6 +182,10 @@ def _load_and_validate_weights() -> Tuple[float, float, float]:
 #  Normalisation utilities
 # ────────────────────────────────────────────────────────────────────────────
 
+# Static ceiling kept as a conservative fallback only.
+# generate_meal_plan() replaces this with a dynamic per-call p99 ceiling
+# so that the normalisation adapts to each disease/severity candidate pool
+# and high-fiber spice blends cannot dominate by clamping to 1.0.
 _NUTRITION_SCORE_MAX: float = 80.0
 
 
@@ -515,6 +559,18 @@ class EnhancedNutritionRecommender:
             score += protein * 1.2
             score -= sugar   * 1.5
 
+            # ── General sodium penalty (non-kidney users) ─────────────
+            # Kidney disease already applies a disease-specific sodium
+            # penalty above. For all other profiles we still need a
+            # light penalty to prevent high-sodium condiments/spice blends
+            # (e.g. Pav bhaji masala at 1814 mg) from dominating rankings.
+            # Penalty kicks in only above 200 mg — a conservative threshold
+            # well within normal dietary guidance (~2000 mg/day budget means
+            # a single food at 200 mg is 10% of the daily budget).
+            if not conditions['has_kidney_disease']:
+                if sodium > 200:
+                    score -= (sodium - 200) * 0.02
+
             # ── Micronutrient bonuses ─────────────────────────────────
             score += vit_c   * 0.1
             score += calcium * 0.01
@@ -533,9 +589,16 @@ class EnhancedNutritionRecommender:
         self, row: pd.Series, user_profile: Dict
     ) -> float:
         """
-        Real content-based nutritional-profile fit score (Step 4 implementation).
+        Real content-based nutritional-profile fit score.
         Four sub-scores: calorie fit (40%), protein density (25%),
         fibre density (20%), sugar inverse (15%).
+
+        Calorie fit uses a meal-type-specific fraction of daily calories
+        so that Snack foods are judged against 15 % of TDEE (not 25 %).
+        The fraction is read from user_profile['_meal_calorie_fraction'],
+        set by generate_meal_plan() before calling _calculate_hybrid_score().
+        Falls back to 25 % when the key is absent (backward compatibility).
+
         Returns float in [0, 1].
         """
         try:
@@ -544,8 +607,11 @@ class EnhancedNutritionRecommender:
             fiber      = _safe_float(row.get('Fibre (g)',        0))
             free_sugar = _safe_float(row.get('Free Sugar (g)',   0))
 
-            daily_cal   = _safe_float(user_profile.get('daily_calories', 2000), 2000)
-            meal_target = daily_cal * 0.25
+            daily_cal        = _safe_float(user_profile.get('daily_calories', 2000), 2000)
+            meal_cal_fraction = _safe_float(
+                user_profile.get('_meal_calorie_fraction', 0.25), 0.25
+            )
+            meal_target = daily_cal * meal_cal_fraction
             if meal_target > 0 and calories > 0:
                 ratio = calories / meal_target
                 calorie_fit = max(0.0, 1.0 - abs(ratio - 1.0))
@@ -584,22 +650,30 @@ class EnhancedNutritionRecommender:
     def _calculate_ncf_score(
         self, row: pd.Series, user_profile: Dict
     ) -> Tuple[float, bool]:
-        """Returns (0.0, False) — NCF is currently unavailable."""
+        """
+        Return a genuine NCF score only when the model is available and the
+        (user, food) pair is known. Otherwise (0.0, False) — never a fake score.
+        """
         if not self._ncf_available:
             return 0.0, False
+        user_id = user_profile.get('user_id') or user_profile.get('username')
+        if not user_id:
+            return 0.0, False
         try:
-            from ncf_integration.models.ncf_model import NCFModel
-            dish_name = str(row.get('Dish Name', ''))
-            matches   = self.df[self.df['Dish Name'] == dish_name]
-            food_idx  = int(matches.index[0]) if not matches.empty else 0
-            user_id   = int(_safe_float(user_profile.get('user_id', 0)))
-            model     = NCFModel.__new__(NCFModel)
-            raw_scores = model.predict(user_id, [food_idx])
-            raw        = _safe_float(raw_scores[0] if raw_scores else 0.0)
-            return _normalise_to_unit(raw, 5.0), True
+            food_id = int(row.get('food_id', 0) or 0)
+        except (TypeError, ValueError):
+            food_id = 0
+        if food_id <= 0:
+            return 0.0, False
+        try:
+            from backend.services.ncf_service import predict_single
+            score = predict_single(str(user_id), food_id)
         except Exception as exc:
             logger.warning("NCF prediction failed: %s.", exc)
             return 0.0, False
+        if score is None:
+            return 0.0, False
+        return max(0.0, min(1.0, float(score))), True
 
     # ── Hybrid score (severity-aware) ─────────────────────────────────────
 
@@ -634,7 +708,13 @@ class EnhancedNutritionRecommender:
 
         # ── 1. Nutrition score (severity-multiplied) ──────────────────
         nutrition_raw  = self._calculate_nutrition_score(row, user_profile)
-        nutrition_norm = _normalise_to_unit(nutrition_raw, _NUTRITION_SCORE_MAX)
+        # Use the dynamic ceiling injected by generate_meal_plan() when present,
+        # otherwise fall back to the static module-level constant.
+        _ceiling = _safe_float(
+            user_profile.get('_nutrition_score_ceiling', _NUTRITION_SCORE_MAX),
+            _NUTRITION_SCORE_MAX,
+        )
+        nutrition_norm = _normalise_to_unit(nutrition_raw, _ceiling)
 
         # ── 2. Severity suitability score ─────────────────────────────
         # Compute per active disease, then take the minimum (strictest wins
@@ -707,6 +787,28 @@ class EnhancedNutritionRecommender:
 
     # ── Diversity penalty ─────────────────────────────────────────────────
 
+    def _exclude_condiment_only_items(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Drop spice/seasoning powders labelled as Snack that are fibre outliers
+        in the dataset (mean + 3 std of MealType == Snack). Uses MealType and
+        Fibre (g) only — no dish-name blocklist.
+        """
+        if df is None or df.empty or 'MealType' not in df.columns:
+            return df
+        meal_l = df['MealType'].astype(str).str.strip().str.lower()
+        fiber = pd.to_numeric(df.get('Fibre (g)', 0), errors='coerce').fillna(0.0)
+        source = self.df if self.df is not None and not self.df.empty else df
+        src_meal = source['MealType'].astype(str).str.strip().str.lower()
+        src_fiber = pd.to_numeric(source.get('Fibre (g)', 0), errors='coerce').fillna(0.0)
+        snack_fiber = src_fiber[src_meal == 'snack']
+        if len(snack_fiber) >= 10 and float(snack_fiber.std() or 0) > 0:
+            cutoff = float(snack_fiber.mean() + 3.0 * snack_fiber.std())
+        else:
+            cutoff = 12.0
+        condiment_mask = meal_l.eq('snack') & (fiber >= cutoff)
+        filtered = df.loc[~condiment_mask]
+        return filtered if not filtered.empty else df
+
     def _apply_diversity_penalty(
         self, df: pd.DataFrame, selected_foods: Set[str]
     ) -> pd.DataFrame:
@@ -752,13 +854,18 @@ class EnhancedNutritionRecommender:
         2. Apply base disease hard filters (config.py thresholds).
         3. Apply severity hard filters (severity_rules.py per disease/tier).
            If pool is too small, log warning but keep remaining foods.
-        4. Compute hybrid score (with severity) for every candidate.
-        5. For each meal slot:
+        4. Compute dynamic nutrition-score ceiling (p99 of the candidate pool)
+           so that high-fiber spice blends cannot clamp to 1.0 and dominate.
+        5. Re-score each meal slot with a meal-type-specific calorie fraction
+           (Breakfast=25%, Lunch=35%, Snack=15%, Dinner=25%) so snack foods
+           are judged against the correct portion of daily calories.
+        6. For each meal slot:
              a. Filter by MealType.
-             b. Apply diversity penalty.
-             c. Select top-N deterministically.
-             d. Attach score breakdowns.
-        6. Aggregate nutrition summary, severity summary, meal explanations.
+             b. Re-score with meal-specific calorie fraction.
+             c. Apply diversity penalty.
+             d. Select top-N deterministically.
+             e. Attach score breakdowns.
+        7. Aggregate nutrition summary, severity summary, meal explanations.
 
         Returns the standard dict + 'severity_info' key with per-disease
         severity levels and explanations.
@@ -789,7 +896,30 @@ class EnhancedNutritionRecommender:
             return self._create_fallback_meal_plan(user_profile, sev_dict)
 
         # ── Stage 3: score all candidates ────────────────────────────
+        # Before scoring, compute a dynamic normalisation ceiling for the
+        # nutrition score. Using a fixed 80.0 allowed high-fiber spice blends
+        # (e.g. rasam powder with 35 g fiber → raw score > 250) to always
+        # clamp to 1.0, making them indistinguishable from genuinely suitable
+        # foods. Instead we use the 99th percentile of the actual score
+        # distribution for this candidate pool and disease/severity profile,
+        # so the ceiling adapts to the real data range.
         filtered_df = filtered_df.copy()
+        raw_scores_for_ceiling = [
+            self._calculate_nutrition_score(row, user_profile)
+            for _, row in filtered_df.iterrows()
+        ]
+        _p99 = float(np.percentile(raw_scores_for_ceiling, 99)) if raw_scores_for_ceiling else _NUTRITION_SCORE_MAX
+        # Guard: never let the ceiling collapse below a minimum useful value.
+        # If almost all foods score 0 (very restrictive profile like severe kidney),
+        # use the max score so at least some differentiation remains.
+        _dynamic_ceiling = max(_p99, max(raw_scores_for_ceiling) * 0.5, 1.0)
+
+        # Temporarily monkey-patch _NUTRITION_SCORE_MAX via a closure variable
+        # captured by _calculate_hybrid_score → _normalise_to_unit.
+        # We avoid mutating the module-level constant. Instead we store the
+        # ceiling in user_profile so _calculate_hybrid_score can read it.
+        user_profile = {**user_profile, '_nutrition_score_ceiling': _dynamic_ceiling}
+
         hybrid_scores, breakdowns = [], []
         for _, row in filtered_df.iterrows():
             h, bd = self._calculate_hybrid_score(row, user_profile)
@@ -805,6 +935,16 @@ class EnhancedNutritionRecommender:
         total_calories: float           = 0.0
         daily_target = _safe_float(user_profile.get('daily_calories', 2000), 2000)
 
+        # Meal-type calorie fractions — used by _calculate_content_score()
+        # to judge each food against the appropriate portion of daily calories.
+        # Snacks are 15 %, not 25 %, so snack-sized foods score correctly.
+        _meal_fractions: Dict[str, float] = {
+            'Breakfast': 0.25,
+            'Lunch':     0.35,
+            'Snack':     0.15,
+            'Dinner':    0.25,
+        }
+
         for meal_type in ['Breakfast', 'Lunch', 'Snack', 'Dinner']:
             meal_lower = meal_type.lower()
             meal_df = filtered_df[
@@ -812,9 +952,27 @@ class EnhancedNutritionRecommender:
                     meal_lower, na=False
                 )
             ]
+            meal_df = self._exclude_condiment_only_items(meal_df)
             if meal_df.empty:
                 meal_plan[meal_type] = []
                 continue
+
+            # Re-score this meal slot with the correct per-meal calorie fraction.
+            # We inject '_meal_calorie_fraction' into a local copy of user_profile
+            # so _calculate_content_score() uses the right TDEE fraction.
+            meal_profile = {
+                **user_profile,
+                '_meal_calorie_fraction': _meal_fractions.get(meal_type, 0.25),
+            }
+            meal_hybrid_scores, meal_breakdowns = [], []
+            for _, row in meal_df.iterrows():
+                h, bd = self._calculate_hybrid_score(row, meal_profile)
+                meal_hybrid_scores.append(h)
+                meal_breakdowns.append(bd)
+
+            meal_df = meal_df.copy()
+            meal_df['hybrid_score']     = meal_hybrid_scores
+            meal_df['_score_breakdown'] = meal_breakdowns
 
             meal_df  = self._apply_diversity_penalty(meal_df, selected_foods)
             num_foods = 3 if meal_type in ['Lunch', 'Dinner'] else 2
@@ -823,6 +981,12 @@ class EnhancedNutritionRecommender:
             annotated = []
             for food in selected:
                 bd   = food.get('_score_breakdown', {})
+                # Copy adjusted_score into the breakdown so callers can verify
+                # selection order. adjusted_score = hybrid_score - diversity_penalty
+                # and is the true ranking column used by _select_top_foods().
+                if 'adjusted_score' in food.index:
+                    bd = dict(bd)
+                    bd['adjusted_score'] = round(float(food['adjusted_score']), 4)
                 food = self._attach_breakdown(food, bd)
                 annotated.append(food)
                 selected_foods.add(food['Dish Name'])
@@ -856,9 +1020,10 @@ class EnhancedNutritionRecommender:
                 },
             },
             'debug_info': {
-                'filtered_foods_count': len(filtered_df),
-                'selected_foods':       list(selected_foods),
-                'user_hash':            self._get_user_hash(user_profile),
+                'filtered_foods_count':    len(filtered_df),
+                'selected_foods':          list(selected_foods),
+                'user_hash':               self._get_user_hash(user_profile),
+                'nutrition_score_ceiling': round(_dynamic_ceiling, 4),
             },
         }
 
@@ -1029,6 +1194,7 @@ class EnhancedNutritionRecommender:
             filtered_df["MealType"].str.lower().str.contains(meal_lower, na=False)
         ]
         meal_df = meal_df[meal_df['Dish Name'] != current_food]
+        meal_df = self._exclude_condiment_only_items(meal_df)
 
         if meal_df.empty:
             return []

@@ -13,6 +13,9 @@ Flow
 
 import streamlit as st
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Ensure analyze variable is defined
 analyze = False
@@ -25,17 +28,21 @@ from meal_planner import generate_comprehensive_recommendations
 import components
 from recommendation import IntelligentNutritionRecommender
 
-# ── NCF (optional — fails gracefully if not installed) ───────────────
-try:
-    from ncf_integration.utils.hybrid_recommender import HybridRecommender
-    NCF_AVAILABLE = True
-except Exception as e:
-    NCF_AVAILABLE = False
-    st.info("NCF integration not available. Recommendations will be based on rule‑based system.")
+# ── NCF (disabled due to integration issues — using hybrid scoring instead) ───────────────
+NCF_AVAILABLE = False  # NCF model exists but has pipeline compatibility issues
 
 # ── Backend helpers ──────────────────────────────────────────────────
 from backend.auth import authenticate, logout
 from backend.database import save_analysis, get_history  # wired below
+
+# ── Weekly Meal Planner ───────────────────────────────────────────────
+WEEKLY_PLANNER_AVAILABLE = False
+try:
+    from backend.services.weekly_meal_planner import generate_weekly_recommendations
+    WEEKLY_PLANNER_AVAILABLE = True
+except Exception as e:
+    WEEKLY_PLANNER_AVAILABLE = False
+    print(f"Weekly planner not available: {e}")
 
 # ── XAI (Explainable AI) ─────────────────────────────────────────────
 try:
@@ -1135,7 +1142,7 @@ if _show_form:
             unsafe_allow_html=True,
         )
 
-        g1, g2, g3, g4 = st.columns(4)
+        g1, g2, g3, g4, g5 = st.columns(5)
 
         _goal_options = ["Weight Loss", "Weight Gain", "Weight Maintenance"]
         with g1:
@@ -1171,17 +1178,9 @@ if _show_form:
                 help="Manually select diseases instead of AI prediction.",
                 key="step4_manual_override",
             )
-        with g4:
-            if NCF_AVAILABLE:
-                use_ncf = st.checkbox(
-                    "AI Food Recommendations (NCF)",
-                    value=st.session_state.get("use_ncf", False),
-                    help="Enable Neural Collaborative Filtering for personalised food recommendations.",
-                    key="step4_use_ncf",
-                )
-            else:
-                use_ncf = False
-                st.caption("NCF unavailable — rule-based recommendations active.")
+        # NCF and 7‑Day Meal Plan are now automatic - no user selection needed
+        use_ncf = NCF_AVAILABLE  # Automatically use NCF if available
+        use_weekly_planner = WEEKLY_PLANNER_AVAILABLE  # Automatically use weekly planner if available
 
         manual_diseases: list = []
         if manual_override:
@@ -1200,7 +1199,8 @@ if _show_form:
         st.session_state.region = region
         st.session_state.auto_predict = auto_predict
         st.session_state.manual_override = manual_override
-        st.session_state.use_ncf = use_ncf
+        st.session_state.use_ncf = use_ncf  # Automatic NCF
+        st.session_state.use_weekly_planner = use_weekly_planner  # Automatic weekly planner
         st.session_state.manual_diseases = manual_diseases
 
         # ── Review Summary ───────────────────────────────────────────────
@@ -1244,7 +1244,7 @@ if _show_form:
         with g_review_col2:
             st.markdown(f"- **Auto Prediction:** {'✓' if st.session_state.get('auto_predict', True) else '✗'}")
             st.markdown(f"- **Manual Override:** {'✓' if st.session_state.get('manual_override', False) else '✗'}")
-            st.markdown(f"- **NCF Recommendations:** {'✓' if st.session_state.get('use_ncf', False) else '✗'}")
+            # NCF is now automatic - no user selection needed
         
         if st.session_state.get('manual_override', False):
             st.markdown(f"- **Manual Diseases:** {', '.join(st.session_state.get('manual_diseases', []))}")
@@ -1470,35 +1470,8 @@ if st.session_state.get("analysis_in_progress", False):
         elif loading_step == 3:
             data = st.session_state.analysis_data
             
-            # ── NCF recommendations (optional) ────────────────────────────
-            _use_ncf = data["use_ncf"] and NCF_AVAILABLE
-            if _use_ncf:
-                try:
-                    if "hybrid_recommender" not in st.session_state:
-                        st.session_state.hybrid_recommender = HybridRecommender()
-                    hr = st.session_state.hybrid_recommender
-                    try:
-                        user_id = (
-                            int(username) if str(username).isdigit()
-                            else hash(str(username)) % 1000
-                        )
-                    except Exception:
-                        user_id = 0
-                    ncf_result = hr.recommend(
-                        user_id=user_id, age=data["age"], gender=data["gender"], bmi=data["bmi"],
-                        hba1c=data["hba1c"], glucose=data["glucose"], sodium=data["sodium"],
-                        potassium=data["potassium"], bp=data["bp"], creatinine=data["creatinine"], top_n=20,
-                    )
-                    st.session_state.ncf_recommendations = (
-                        hr.format_recommendations_for_display(ncf_result["recommendations"])
-                    )
-                    st.session_state.ncf_explanation = hr.get_recommendation_explanation(
-                        ncf_result["detected_diseases"]
-                    )
-                    st.session_state.ncf_diseases = ncf_result["detected_diseases"]
-                except Exception as exc:
-                    st.error(f"NCF error: {exc}. Using rule-based recommendations.")
-                    _use_ncf = False
+            # ── NCF recommendations (disabled — using hybrid scoring instead) ──
+            _use_ncf = False  # NCF disabled due to pipeline compatibility issues
 
             # ── Rule-based recommendations ────────────────────────────────
             recommendations = generate_comprehensive_recommendations(
@@ -1510,9 +1483,33 @@ if st.session_state.get("analysis_in_progress", False):
                 goal=data.get("goal"), region=data.get("region"),
                 severity=data.get("severity", {}),   # ← severity dict from Step 2
             )
+            
+            # ── Weekly diverse meal plan (automatic) ─────────────────────
+            _use_weekly = WEEKLY_PLANNER_AVAILABLE  # Automatically use weekly planner if available
+            if _use_weekly:
+                try:
+                    weekly_profile = {
+                        'age': data.get("age", 45),
+                        'gender': data.get("gender", "Male"),
+                        'weight': data.get("weight", 70),
+                        'height': data.get("height", 170),
+                        'bmi': data.get("bmi", 22.0),
+                        'activity_level': data.get("activity", "Moderate"),
+                        'diseases': data.get("diseases", []),
+                        'severity': data.get("severity", {}),
+                        'daily_calories': data.get("tdee", 2000)
+                    }
+                    logger.info(f"Generating weekly plan for profile: {weekly_profile}")
+                    weekly_result = generate_weekly_recommendations(weekly_profile)
+                    st.session_state.weekly_plan = weekly_result
+                    logger.info("Weekly plan generated successfully")
+                except Exception as exc:
+                    logger.exception(f"Weekly planner error: {exc}")
+                    logger.info("Weekly planner error - using daily recommendations.")
+                    _use_weekly = False
 
             st.session_state.analysis_data.update({
-                "recommendations": recommendations, "use_ncf": _use_ncf
+                "recommendations": recommendations, "use_ncf": _use_ncf, "use_weekly": _use_weekly
             })
             st.session_state.loading_step = 4
             st.rerun()
@@ -1586,6 +1583,8 @@ if st.session_state.get("analysis_in_progress", False):
                 "diseases":         data["diseases"],
                 "recommendations":  data["recommendations"],
                 "use_ncf":          data["use_ncf"],
+                "use_weekly":       data.get("use_weekly", False),
+                "severity":         data.get("severity", {}),  # needed for swap alternatives
                 # Input values for Profile tab display
                 "pat_name":    data["pat_name"],    "age":      data["age"],
                 "gender":      data["gender"],      "height":   data["height"],
@@ -1976,36 +1975,135 @@ else:
 
     st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════════════
-    #  SECTION — Nutrition Recommendations & Meal Plan
-    # ══════════════════════════════════════════════════════════════════
+    weekly_plan = st.session_state.get('weekly_plan', {})
+    diversity = weekly_plan.get('diversity_metrics') or recommendations.get('diversity', {})
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Unique Foods", diversity.get('unique_foods', 0))
+    with col2:
+        st.metric("Unique %", f"{diversity.get('unique_food_percentage', 0)}%")
+    with col3:
+        st.metric("Max Repetition", diversity.get('max_repetition_count', 0))
+    with col4:
+        st.metric("Repeated Foods", diversity.get('repeated_foods_count', 0))
 
-    if use_ncf and "ncf_recommendations" in st.session_state:
-        components.section_header("🤖", "AI-Powered Recommendations (NCF)")
-        components.status_banner(
-            "🤖", "Neural Collaborative Filtering Active",
-            st.session_state.get("ncf_explanation", "Personalised recommendations from your profile."),
-            "info",
-        )
-        ncf_df = st.session_state.ncf_recommendations
-        if not ncf_df.empty:
-            st.dataframe(ncf_df, use_container_width=True, hide_index=True)
-        detected = st.session_state.get("ncf_diseases", [])
-        if detected and detected != ["normal"]:
-            st.markdown("**Detected conditions:** " + ", ".join(d.replace("_", " ").title() for d in detected))
+    st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
 
-    components.section_header("🍽️", "Personalised Daily Meal Plan")
+
+    weekly_plan = st.session_state.get('weekly_plan', weekly_plan)
+    for day_plan in weekly_plan.get('weekly_plan', []):
+        day_name = day_plan.get('day', 'Unknown Day')
+        day_number = day_plan.get('day_number', 0)
+        meals = day_plan.get('meals', {})
+        daily_nutrition = day_plan.get('daily_nutrition', {})
+
+        with st.expander(f"📅 {day_name}", expanded=(day_number == 1)):
+            # Daily nutrition summary
+            nut_col1, nut_col2, nut_col3 = st.columns(3)
+            with nut_col1:
+                st.metric("Calories", f"{daily_nutrition.get('calories', 0):.0f} kcal")
+            with nut_col2:
+                st.metric("Protein", f"{daily_nutrition.get('protein', 0):.1f}g")
+            with nut_col3:
+                st.metric("Fiber", f"{daily_nutrition.get('fiber', 0):.1f}g")
+
+            st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
+
+            # Display meals for the day
+            for meal_type, foods in meals.items():
+                if foods:
+                    components.meal_tag(meal_type.replace('_', ' ').title())
+
+                    for food in foods:
+                        food_name = food.get('Dish Name', 'Unknown Food')
+                        calories = food.get('Calories (kcal)', 0)
+                        protein = food.get('Protein (g)', None)
+                        carbs = food.get('Carbohydrates (g)', None)
+                        fat = food.get('Fats (g)', None)
+                        fiber = food.get('Fibre (g)', None)
+
+                        # Display food item card
+                        components.food_item_card(
+                            food_name=food_name,
+                            calories=calories,
+                            protein=protein,
+                            carbs=carbs,
+                            fat=fat,
+                            fiber=fiber,
+                            meal_type=meal_type,
+                            food_index=0,
+                            show_swap=False  # Disable swap for weekly plan
+                        )
+                        st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
     
-    # Get the original meal plan from recommendations
+    # Display safety report
+    safety = weekly_plan.get('safety_report', {})
+    if safety.get('filtering_applied'):
+        st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
+        components.section_header("🛡️", "Safety Filter Report")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Original Foods", safety.get('original_food_count', 0))
+        with col2:
+            st.metric("Filtered Foods", safety.get('filtered_food_count', 0))
+        
+        st.info(f"Applied disease and severity filters. Removed {safety.get('foods_removed', 0)} foods for safety.")
+    
+    # Display scoring info
+    scoring = weekly_plan.get('scoring_info', {})
+    st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
+    components.section_header("📊", "Scoring Information")
+    st.json(scoring)
+    
+    # Foods to avoid and nutrition tips (shown regardless of weekly/daily plan)
+    st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
+    
+    components.section_header("🚫", "Foods to Avoid")
+    avoid = recommendations.get("foods_to_avoid", [])
+    if avoid:
+        if isinstance(avoid[0], dict):
+            avoid_df = pd.DataFrame(avoid)
+            avoid_df.columns = [c.title() for c in avoid_df.columns]
+        else:
+            avoid_df = pd.DataFrame({"Food": avoid})
+        st.dataframe(avoid_df, use_container_width=True, hide_index=True)
+    else:
+        components.status_banner("✅", "No Restrictions",
+            "No specific foods to avoid based on your current health profile.", "ok")
+
+    macro_data = recommendations.get("macronutrients") or recommendations.get("macros")
+    if macro_data:
+        components.section_header("🥗", "Macronutrient Distribution")
+        if isinstance(macro_data, dict):
+            macro_df = pd.DataFrame([
+                {"macro": k.replace("_g", "").capitalize(), "grams": v}
+                for k, v in macro_data.items() if isinstance(v, (int, float))
+            ])
+        elif isinstance(macro_data, pd.DataFrame):
+            macro_df = macro_data
+        else:
+            macro_df = pd.DataFrame()
+        if not macro_df.empty:
+            components.chart_macronutrient(macro_df)
+
+    components.section_header("💡", "Daily Nutrition Tips")
+    tips = recommendations.get("nutrition_tips", [])
+    if tips:
+        components.tip_list(tips)
+    else:
+        st.info("No nutrition tips available for your current profile.")
+    
+    # Daily meal plan is only shown when a weekly plan was not generated.
+    # meal_validation / meal_plan must always be defined so the render path
+    # does not raise NameError when the weekly planner ran first.
     meal_plan = recommendations.get("meal_plan", {})
-    
-    # Check if enhanced recommender is being used
     use_enhanced = recommendations.get("use_enhanced_recommender", False)
     use_improved_planner = recommendations.get("use_improved_planner", False)
-    meal_validation = recommendations.get("meal_validation", {})
-    
-    # Display calorie targeting info if using enhanced recommender
-    if use_enhanced:
+    meal_validation = weekly_plan.get("meal_validation") or recommendations.get("meal_validation", {})
+    if not isinstance(meal_validation, dict):
+        meal_validation = {'is_valid': True, 'warnings': [], 'errors': []}
+
+    if "weekly_plan" not in st.session_state:
         target_calories = recommendations.get("target_calories", tdee)
         total_calories = recommendations.get("total_calories", 0)
         calorie_diff = recommendations.get("calorie_difference", 0)
@@ -2032,11 +2130,16 @@ else:
             )
         
         st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+    else:
+        meal_plan = {}
     
     # Display validation warnings if any
     if meal_validation.get('warnings'):
         for warning in meal_validation['warnings']:
             st.warning(f"⚠️ {warning}")
+    if meal_validation.get('errors'):
+        for err in meal_validation['errors']:
+            st.error(err)
     
     if meal_plan:
         meal_explanations = recommendations.get("meal_explanations", {})
@@ -2160,8 +2263,9 @@ else:
                         'sodium': sodium,
                         'potassium': potassium,
                         'creatinine': creatinine,
-                        'goal': st.session_state.analysis_data.get("goal", "Weight Loss"),
-                        'region': st.session_state.analysis_data.get("region", "Andhra Pradesh")
+                        'goal': a.get("goal", "Weight Loss"),
+                        'region': a.get("region", "Andhra Pradesh"),
+                        'severity': a.get("severity", {}),  # ensures swap respects disease severity
                     }
                     
                     recommender = EnhancedNutritionRecommender()
@@ -2236,8 +2340,7 @@ else:
                     st.session_state.swap_state["active_swap"] = None
                     st.session_state.swap_state["alternatives"] = None
                     st.rerun()
-    else:
-        st.info("Meal plan data is not available.")
+    # End of daily meal plan section (only shown when weekly planner unavailable)
 
 
 def _display_recommendation_charts(meal_plan: dict, nutrition_summary: dict, target_calories: float):
@@ -2305,43 +2408,6 @@ def _display_recommendation_charts(meal_plan: dict, nutrition_summary: dict, tar
                 
                 st.plotly_chart(fig, use_container_width=True)
     
-    st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
-
-    components.section_header("🚫", "Foods to Avoid")
-    avoid = recommendations.get("foods_to_avoid", [])
-    if avoid:
-        if isinstance(avoid[0], dict):
-            avoid_df = pd.DataFrame(avoid)
-            avoid_df.columns = [c.title() for c in avoid_df.columns]
-        else:
-            avoid_df = pd.DataFrame({"Food": avoid})
-        st.dataframe(avoid_df, use_container_width=True, hide_index=True)
-    else:
-        components.status_banner("✅", "No Restrictions",
-            "No specific foods to avoid based on your current health profile.", "ok")
-
-    macro_data = recommendations.get("macronutrients") or recommendations.get("macros")
-    if macro_data:
-        components.section_header("🥗", "Macronutrient Distribution")
-        if isinstance(macro_data, dict):
-            macro_df = pd.DataFrame([
-                {"macro": k.replace("_g", "").capitalize(), "grams": v}
-                for k, v in macro_data.items() if isinstance(v, (int, float))
-            ])
-        elif isinstance(macro_data, pd.DataFrame):
-            macro_df = macro_data
-        else:
-            macro_df = pd.DataFrame()
-        if not macro_df.empty:
-            components.chart_macronutrient(macro_df)
-
-    components.section_header("💡", "Daily Nutrition Tips")
-    tips = recommendations.get("nutrition_tips", [])
-    if tips:
-        components.tip_list(tips)
-    else:
-        st.info("No nutrition tips available for your current profile.")
-
     st.markdown("<div class='page-divider'></div>", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════

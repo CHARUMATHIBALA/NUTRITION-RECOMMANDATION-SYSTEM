@@ -11,6 +11,9 @@ import os
 from datetime import datetime
 import json
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from ncf_integration.models.ncf_model import NCFModel, AdvancedNCF
 
 
@@ -258,9 +261,9 @@ class NCFTrainer:
             'epochs': self.epochs,
             'validation_split': self.validation_split,
             'learning_rate': self.learning_rate,
-            'train_samples': len(self.train_data) if self.train_data else 0,
-            'val_samples': len(self.val_data) if self.val_data else 0,
-            'test_samples': len(self.test_data) if self.test_data else 0,
+            'train_samples': len(self.train_data) if self.train_data is not None else 0,
+            'val_samples': len(self.val_data) if self.val_data is not None else 0,
+            'test_samples': len(self.test_data) if self.test_data is not None else 0,
             'training_date': datetime.now().isoformat(),
             'final_train_loss': self.history.history['loss'][-1] if self.history else None,
             'final_val_loss': self.history.history['val_loss'][-1] if self.history else None,
@@ -329,7 +332,7 @@ def main():
     print("=== Neural Collaborative Filtering Training ===\n")
     
     # Load data to get dimensions
-    data_path = 'ncf_integration/data/user_food_interactions.csv'
+    data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'user_food_interactions.csv')
     interactions_df = pd.read_csv(data_path)
     
     num_users = interactions_df['user_id'].nunique()
@@ -365,7 +368,7 @@ def main():
     )
     
     # Train model
-    model_save_path = 'ncf_integration/models/ncf_model.keras'
+    model_save_path = os.path.join(os.path.dirname(__file__), 'ncf_model.keras')
     history = trainer.train(
         model_save_path=model_save_path,
         early_stopping_patience=10
@@ -376,13 +379,27 @@ def main():
     
     # Plot training history
     trainer.plot_training_history(
-        save_path='ncf_integration/models/training_history.png'
+        save_path=os.path.join(os.path.dirname(__file__), 'training_history.png')
     )
     
     # Save training configuration
     trainer.save_training_config(
-        save_path='ncf_integration/models/training_config.json'
+        save_path=os.path.join(os.path.dirname(__file__), 'training_config.json')
     )
+    
+    # Save mappings file for NCF service
+    mappings = {
+        "user_to_idx": {str(i): i for i in range(num_users)},
+        "food_id_to_idx": {str(i): i for i in range(num_items)},
+        "num_users": num_users,
+        "num_items": num_items,
+        "trained_on": datetime.now().isoformat(),
+        "training_interactions": len(interactions_df)
+    }
+    mappings_path = os.path.join(os.path.dirname(__file__), 'ncf_mappings.json')
+    with open(mappings_path, 'w') as f:
+        json.dump(mappings, f, indent=2)
+    print(f"Mappings saved to: {mappings_path}")
     
     print("\n=== Training Complete ===")
     print(f"Model saved to: {model_save_path}")
