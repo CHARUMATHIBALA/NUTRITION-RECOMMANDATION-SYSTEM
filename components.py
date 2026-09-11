@@ -102,14 +102,20 @@ def section_header(icon: str, title: str):
 #  METRIC CARD
 # ════════════════════════════════════════════════════════════════════
 
-def metric_card(label: str, value: str, icon: str = "", color: str = "#2563EB"):
+def metric_card(label: str, value: str, icon: str = "", color: str = "#1D4ED8"):
     """Centred KPI card: icon · label · big value."""
     _icon_class = {
+        "#1D4ED8": "icon-blue",
         "#2563EB": "icon-blue",
+        "#047857": "icon-green",
         "#16A34A": "icon-green",
+        "#B45309": "icon-amber",
         "#D97706": "icon-amber",
         "#7C3AED": "icon-purple",
+        "#0369A1": "icon-sky",
         "#0284C7": "icon-sky",
+        "#B91C1C": "icon-red",
+        "#DC2626": "icon-red",
     }.get(color, "icon-blue")
 
     st.markdown(
@@ -436,10 +442,10 @@ def dashboard_stats_strip(
     _risk_bg   = "#ECFDF5" if diseases == ["Normal"] else "#FFFBEB"
 
     _bmi_color = (
-        "#059669" if "normal"     in bmi_cat.lower() else
-        "#D97706" if "overweight" in bmi_cat.lower() else
-        "#DC2626" if "obese"      in bmi_cat.lower() else
-        "#0284C7"
+        "#047857" if "normal"     in bmi_cat.lower() else
+        "#B45309" if "overweight" in bmi_cat.lower() else
+        "#B91C1C" if "obese"      in bmi_cat.lower() else
+        "#0369A1"
     )
 
     st.markdown(
@@ -658,28 +664,30 @@ _BLUE_PALETTE = [
 
 
 def _theme(fig, height: int = 260):
-    """Apply clean white background and Inter font to a Plotly figure."""
+    """Apply clean transparent background, Inter font & professional text color to a Plotly figure."""
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Inter, Plus Jakarta Sans, sans-serif",
-                  size=12, color="#334155"),
+                  size=13, color="#0B1120"),
         margin=dict(t=36, b=28, l=16, r=16),
         height=height,
+        title_font=dict(size=13, color="#334155"),
+        legend_title_font=dict(size=12, color="#334155"),
     )
     return fig
 
 
 def chart_bmi_gauge(bmi: float):
-    """Gauge chart visualising BMI against WHO thresholds."""
+    """Gauge chart visualising BMI against WHO thresholds with WCAG-AA colors."""
     if bmi < 18.5:
-        color = "#0EA5E9"
+        color = "#0369A1"
     elif bmi < 25:
-        color = "#059669"
+        color = "#047857"
     elif bmi < 30:
-        color = "#F59E0B"
+        color = "#B45309"
     else:
-        color = "#DC2626"
+        color = "#B91C1C"
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
@@ -687,50 +695,50 @@ def chart_bmi_gauge(bmi: float):
         delta={
             "reference": 22,
             "valueformat": ".1f",
-            "increasing": {"color": "#DC2626"},
-            "decreasing": {"color": "#059669"},
+            "increasing": {"color": "#B91C1C"},
+            "decreasing": {"color": "#047857"},
         },
         number={
             "valueformat": ".1f",
-            "font": {"size": 32, "color": "#0F172A"},
+            "font": {"size": 34, "color": "#0B1120", "family": "Inter, sans-serif"},
         },
         title={
             "text": "Body Mass Index (BMI)",
-            "font": {"size": 12, "color": "#64748B"},
+            "font": {"size": 13, "color": "#334155", "family": "Inter, sans-serif"},
         },
         gauge={
             "axis": {
                 "range": [10, 40],
-                "tickwidth": 1,
-                "tickcolor": "#E2E8F0",
+                "tickwidth": 1.5,
+                "tickcolor": "#CBD5F0",
                 "tickvals": [10, 18.5, 25, 30, 40],
                 "ticktext": ["10", "18.5", "25", "30", "40"],
-                "tickfont": {"size": 10},
+                "tickfont": {"size": 11, "color": "#475569"},
             },
             "bar": {"color": color, "thickness": 0.24},
             "bgcolor": "rgba(0,0,0,0)",
             "borderwidth": 0,
             "steps": [
-                {"range": [10,   18.5], "color": "rgba(14,165,233,.10)"},
-                {"range": [18.5, 25],   "color": "rgba(5,150,105,.10)"},
-                {"range": [25,   30],   "color": "rgba(245,158,11,.10)"},
-                {"range": [30,   40],   "color": "rgba(220,38,38,.10)"},
+                {"range": [10,   18.5], "color": "rgba(3,105,161,.12)"},
+                {"range": [18.5, 25],   "color": "rgba(4,120,87,.12)"},
+                {"range": [25,   30],   "color": "rgba(180,83,9,.12)"},
+                {"range": [30,   40],   "color": "rgba(185,28,28,.12)"},
             ],
             "threshold": {
-                "line": {"color": color, "width": 4},
-                "thickness": 0.75,
+                "line": {"color": color, "width": 4.5},
+                "thickness": 0.78,
                 "value": bmi,
             },
         },
     ))
-    fig = _theme(fig, height=265)
+    fig = _theme(fig, height=270)
     st.plotly_chart(fig, use_container_width=True)
 
 
 def chart_disease_risk(score: float, title: str = "Risk Score"):
-    """0-100% gauge for generic disease risk."""
+    """0-100% gauge for generic disease risk with WCAG-AA colors."""
     pct = score * 100
-    color = "#059669" if pct < 33 else ("#F59E0B" if pct < 66 else "#DC2626")
+    color = "#047857" if pct < 33 else ("#B45309" if pct < 66 else "#B91C1C")
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -738,22 +746,27 @@ def chart_disease_risk(score: float, title: str = "Risk Score"):
         number={
             "suffix": "%",
             "valueformat": ".0f",
-            "font": {"size": 28, "color": "#0F172A"},
+            "font": {"size": 30, "color": "#0B1120", "family": "Inter, sans-serif"},
         },
-        title={"text": title, "font": {"size": 12, "color": "#64748B"}},
+        title={"text": title, "font": {"size": 13, "color": "#334155", "family": "Inter, sans-serif"}},
         gauge={
-            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#E2E8F0"},
+            "axis": {
+                "range": [0, 100],
+                "tickwidth": 1.5,
+                "tickcolor": "#CBD5F0",
+                "tickfont": {"size": 11, "color": "#475569"},
+            },
             "bar": {"color": color, "thickness": 0.24},
             "bgcolor": "rgba(0,0,0,0)",
             "borderwidth": 0,
             "steps": [
-                {"range": [0,  33], "color": "rgba(5,150,105,.10)"},
-                {"range": [33, 66], "color": "rgba(245,158,11,.10)"},
-                {"range": [66,100], "color": "rgba(220,38,38,.10)"},
+                {"range": [0,  33], "color": "rgba(4,120,87,.12)"},
+                {"range": [33, 66], "color": "rgba(180,83,9,.12)"},
+                {"range": [66,100], "color": "rgba(185,28,28,.12)"},
             ],
         },
     ))
-    fig = _theme(fig, height=235)
+    fig = _theme(fig, height=240)
     st.plotly_chart(fig, use_container_width=True)
 
 

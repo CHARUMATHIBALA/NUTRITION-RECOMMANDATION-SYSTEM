@@ -1,24 +1,23 @@
 [server]
-# Bind to all network interfaces so the app is reachable via both
-# http://localhost:8501  and  http://<machine-ip>:8501
 address = "0.0.0.0"
 port = 8501
-
-# Disable the "Are you sure you want to leave?" browser dialog
 headless = false
-
-# Allow connections from any origin (needed for LAN access)
 enableCORS = false
 enableXsrfProtection = false
+enableStaticServing = false
+
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
+serverPort = 8501
 
 [theme]
-# Premium Blue & White Healthcare Theme — matches assets/style.css
-# Primary blue (#1A56DB) used for buttons, accents and interactive elements
-primaryColor = "#1A56DB"
-# Page background — same as --c-bg CSS variable
-backgroundColor = "#F4F7FF"
-# Card/surface background — same as --c-surface CSS variable
+primaryColor = "#1D4ED8"
+backgroundColor = "#F0F4FF"
 secondaryBackgroundColor = "#FFFFFF"
-# Primary text colour — same as --c-text CSS variable
-textColor = "#0F172A"
-font = "sans serif"
+textColor = "#0B1120"
+font = "Inter, sans serif"
+
+[client]
+showErrorDetails = true
+toolbarMode = "viewer"

@@ -1,5 +1,3 @@
-
-
 from __future__ import annotations
 
 import logging
@@ -14,6 +12,7 @@ import pandas as pd
 from models import food_df
 import config
 from backend.services.enhanced_recommender import EnhancedNutritionRecommender
+from backend.services.config_validation import load_default_validation_config, ValidationConfig
 from backend.services.severity_rules import (
     get_severity_explanation,
     get_recommendation_reason,
@@ -121,11 +120,12 @@ class WeeklyMealPlanner:
     DIVERSITY_BONUS = 0.1              # Bonus for food category diversity
     MAX_FOOD_USES = 1                   # Enforce unique foods across the week
 
-    def __init__(self):
+    def __init__(self, validation_config: Optional[ValidationConfig] = None):
         self.base_recommender = EnhancedNutritionRecommender()
         self.usage_tracker = FoodUsageTracker()
         self._condiment_fiber_cutoff: Optional[float] = None
-        
+        # Load validation configuration (allow injection for testing)
+        self.validation_config: ValidationConfig = validation_config if validation_config is not None else load_default_validation_config()
     def _get_food_category(self, food_name: str) -> str:
         """
         Extract food category from dish name for diversity considerations.
@@ -530,8 +530,10 @@ class WeeklyMealPlanner:
         weekly_plan: List[Dict],
         diversity_metrics: Dict,
         filtered_df: pd.DataFrame,
+        daily_calories: Optional[float] = None,
     ) -> Dict:
-        """Post-generation checks for the 7-day plan. Does not change safety rules."""
+        """Post-generation checks for the 7-day plan. Includes extended validation.
+        """
         errors: List[str] = []
         warnings: List[str] = []
         checks: Dict[str, bool] = {}
@@ -548,6 +550,7 @@ class WeeklyMealPlanner:
         day_signatures: List[Tuple] = []
         meal_combos: Dict[str, List[Tuple]] = defaultdict(list)
         food_counts: Dict[str, int] = defaultdict(int)
+        total_calories = 0.0
 
         for day_plan in weekly_plan:
             meals = day_plan.get('meals', {})
@@ -564,6 +567,7 @@ class WeeklyMealPlanner:
                     name = food.get('Dish Name', '')
                     day_foods.append(name)
                     food_counts[name] += 1
+                    total_calories += float(food.get('Calories (kcal)', 0) or 0)
                     mt = str(food.get('MealType', '')).lower()
                     slot = meal_type.lower()
                     compatible = (
@@ -588,6 +592,15 @@ class WeeklyMealPlanner:
         checks['no_condiment_standalone_meals'] = condiment_ok
         if not condiment_ok:
             errors.append("Condiment/spice-only item selected as a standalone meal")
+
+        if daily_calories is not None and daily_calories > 0:
+            avg_daily_calories = total_calories / 7.0
+            calorie_deviation = abs(avg_daily_calories - daily_calories) / daily_calories
+            checks['calorie_target_adherence'] = calorie_deviation <= 0.30
+            if not checks['calorie_target_adherence']:
+                warnings.append(
+                    f"Average daily calories ({round(avg_daily_calories, 1)} kcal) deviates from target ({daily_calories} kcal) by {round(calorie_deviation * 100, 1)}%"
+                )
 
         duplicate_days = len(day_signatures) != len(set(day_signatures))
         checks['no_duplicate_day_combinations'] = not duplicate_days
@@ -671,6 +684,63 @@ class WeeklyMealPlanner:
 
         checks['deterministic_selection'] = True
 
+        # ---- Additional validation based on ValidationConfig ----
+        cfg = self.validation_config
+        if cfg.enable_optional_checks:
+            # Compute per-day nutrition totals and category diversity
+            for day_idx, day_plan in enumerate(weekly_plan, start=1):
+                # Gather foods for the day
+                day_foods = []
+                meal_calories: Dict[str, float] = {}
+                categories: Set[str] = set()
+                for meal_type, foods in day_plan.get('meals', {}).items():
+                    total_cal = 0.0
+                    for food in foods:
+                        day_foods.append(food)
+                        total_cal += float(food.get('Calories (kcal)', 0) or 0)
+                        categories.add(self._get_food_category(str(food.get('Dish Name', ''))))
+                    meal_calories[meal_type] = total_cal
+                # Nutrition limits
+                totals = self._calculate_daily_nutrition_totals({k: [pd.Series(f) for f in v] for k, v in day_plan.get('meals', {}).items()})
+                if cfg.calories_min is not None and totals['calories'] < cfg.calories_min:
+                    errors.append(f"Day {day_idx}: calories {totals['calories']} below minimum {cfg.calories_min}")
+                if cfg.calories_max is not None and totals['calories'] > cfg.calories_max:
+                    errors.append(f"Day {day_idx}: calories {totals['calories']} exceed maximum {cfg.calories_max}")
+                if cfg.protein_min is not None and totals['protein'] < cfg.protein_min:
+                    errors.append(f"Day {day_idx}: protein {totals['protein']}g below minimum {cfg.protein_min}g")
+                if cfg.protein_max is not None and totals['protein'] > cfg.protein_max:
+                    errors.append(f"Day {day_idx}: protein {totals['protein']}g exceed maximum {cfg.protein_max}g")
+                if cfg.carbs_min is not None and totals['carbohydrates'] < cfg.carbs_min:
+                    errors.append(f"Day {day_idx}: carbs {totals['carbohydrates']}g below minimum {cfg.carbs_min}g")
+                if cfg.carbs_max is not None and totals['carbohydrates'] > cfg.carbs_max:
+                    errors.append(f"Day {day_idx}: carbs {totals['carbohydrates']}g exceed maximum {cfg.carbs_max}g")
+                if cfg.fats_min is not None and totals['fats'] < cfg.fats_min:
+                    errors.append(f"Day {day_idx}: fats {totals['fats']}g below minimum {cfg.fats_min}g")
+                if cfg.fats_max is not None and totals['fats'] > cfg.fats_max:
+                    errors.append(f"Day {day_idx}: fats {totals['fats']}g exceed maximum {cfg.fats_max}g")
+                if cfg.fiber_min is not None and totals['fiber'] < cfg.fiber_min:
+                    errors.append(f"Day {day_idx}: fiber {totals['fiber']}g below minimum {cfg.fiber_min}g")
+                if cfg.fiber_max is not None and totals['fiber'] > cfg.fiber_max:
+                    errors.append(f"Day {day_idx}: fiber {totals['fiber']}g exceed maximum {cfg.fiber_max}g")
+                if cfg.sodium_min is not None and totals['sodium'] < cfg.sodium_min:
+                    errors.append(f"Day {day_idx}: sodium {totals['sodium']}mg below minimum {cfg.sodium_min}mg")
+                if cfg.sodium_max is not None and totals['sodium'] > cfg.sodium_max:
+                    errors.append(f"Day {day_idx}: sodium {totals['sodium']}mg exceed maximum {cfg.sodium_max}mg")
+                # Calorie distribution per meal
+                daily_target = cfg.calories_min if cfg.calories_min is not None else cfg.calories_max
+                if daily_target:
+                    for meal_type, cal in meal_calories.items():
+                        target_frac = self.MEAL_CALORIE_DISTRIBUTION.get(meal_type.capitalize(), 0.25)
+                        target_cal = daily_target * target_frac
+                        tol = cfg.calorie_distribution_tolerance
+                        if abs(cal - target_cal) > target_cal * tol:
+                            warnings.append(
+                                f"Day {day_idx} {meal_type}: calories {cal:.1f} deviate from target {target_cal:.1f} by >{tol*100:.0f}%"
+                            )
+                # Category diversity
+                if len(categories) < cfg.min_distinct_categories:
+                    warnings.append(f"Day {day_idx}: only {len(categories)} distinct food categories (minimum {cfg.min_distinct_categories})")
+        # End of additional validation
         return {
             'is_valid': len(errors) == 0,
             'warnings': warnings,

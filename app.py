@@ -1,15 +1,4 @@
-"""app.py — Smart Health Dashboard main entry point.
 
-Flow
-----
-1. Page config + CSS injection
-2. Theme initialisation (light / dark)
-3. Authentication gate  — stops here if not logged in
-4. Sidebar  — branding, user info, dark mode, reset, logout  (NO patient inputs)
-5. Main page — st.form with all patient / medical inputs + Analyse button
-6. Analysis — triggered by form submission (same logic as before)
-7. Main area — 4 tabs: Patient Profile · Health Summary · Predictions · Recommendations
-"""
 
 import streamlit as st
 import pandas as pd
@@ -213,101 +202,103 @@ def _validate_inputs(
 
     # ── Patient name ─────────────────────────────────────────────────
     name_clean = str(pat_name).strip() if pat_name else ""
+    # Patient Name is required.
     if not name_clean:
-        errors.append("❗ **Patient Name** is required. Please enter the patient's full name.")
-    elif len(name_clean) < 2:
-        errors.append("❗ **Patient Name** must be at least 2 characters.")
-    elif not any(c.isalpha() for c in name_clean):
-        errors.append("❗ **Patient Name** must contain at least one letter.")
+        errors.append("**Patient Name** is required. Please enter the patient's full name.")
+    else:
+        if len(name_clean) < 2:
+            errors.append("**Patient Name** must be at least 2 characters.")
+        elif not any(c.isalpha() for c in name_clean):
+            errors.append("**Patient Name** must contain at least one letter.")
 
     # ── Age ──────────────────────────────────────────────────────────
     try:
         age_v = int(age)
         if age_v < 1 or age_v > 120:
-            errors.append("❗ **Age** must be between 1 and 120 years.")
+            errors.append("**Age** must be between 1 and 120 years.")
     except (TypeError, ValueError):
-        errors.append("❗ **Age** must be a whole number between 1 and 120.")
+        errors.append("**Age** must be a whole number between 1 and 120.")
 
     # ── Height ───────────────────────────────────────────────────────
     try:
         h_v = float(height)
         if h_v < 100 or h_v > 250:
-            errors.append("❗ **Height** must be between 100 and 250 cm.")
+            errors.append("**Height** must be between 100 and 250 cm.")
     except (TypeError, ValueError):
-        errors.append("❗ **Height** must be a number between 100 and 250 cm.")
+        errors.append("**Height** must be a number between 100 and 250 cm.")
 
     # ── Weight ───────────────────────────────────────────────────────
     try:
         w_v = float(weight)
         if w_v < 30 or w_v > 300:
-            errors.append("❗ **Weight** must be between 30 and 300 kg.")
+            errors.append("**Weight** must be between 30 and 300 kg.")
     except (TypeError, ValueError):
-        errors.append("❗ **Weight** must be a number between 30 and 300 kg.")
+        errors.append("**Weight** must be a number between 30 and 300 kg.")
 
     # ── HbA1c ────────────────────────────────────────────────────────
     try:
         h1c = float(hba1c)
         if h1c < 3.0 or h1c > 15.0:
-            errors.append("❗ **HbA1c** must be between 3.0 % and 15.0 %.")
+            errors.append("**HbA1c** must be between 3.0 % and 15.0 %.")
     except (TypeError, ValueError):
-        errors.append("❗ **HbA1c** must be a number between 3.0 and 15.0.")
+        errors.append("**HbA1c** must be a number between 3.0 and 15.0.")
 
     # ── Blood Glucose ────────────────────────────────────────────────
     try:
         glc = float(glucose)
         if glc < 50 or glc > 500:
-            errors.append("❗ **Blood Glucose** must be between 50 and 500 mg/dL.")
+            errors.append("**Blood Glucose** must be between 50 and 500 mg/dL.")
     except (TypeError, ValueError):
-        errors.append("❗ **Blood Glucose** must be a number between 50 and 500 mg/dL.")
+        errors.append("**Blood Glucose** must be a number between 50 and 500 mg/dL.")
 
     # ── Systolic BP ──────────────────────────────────────────────────
     try:
         sbp = int(bp)
         if sbp < 80 or sbp > 200:
-            errors.append("❗ **Systolic BP** must be between 80 and 200 mmHg.")
+            errors.append("**Systolic BP** must be between 80 and 200 mmHg.")
     except (TypeError, ValueError):
-        errors.append("❗ **Systolic BP** must be a whole number between 80 and 200 mmHg.")
+        errors.append("**Systolic BP** must be a whole number between 80 and 200 mmHg.")
 
     # ── Diastolic BP ─────────────────────────────────────────────────
     try:
         dbp = int(bp_diastolic)
         if dbp < 40 or dbp > 140:
-            errors.append("❗ **Diastolic BP** must be between 40 and 140 mmHg.")
+            errors.append("**Diastolic BP** must be between 40 and 140 mmHg.")
         else:
             try:
                 if dbp >= int(bp):
                     errors.append(
-                        f"❗ **Diastolic BP** ({bp_diastolic} mmHg) must be lower than "
+                        f"**Diastolic BP** ({bp_diastolic} mmHg) must be lower than "
                         f"**Systolic BP** ({bp} mmHg)."
                     )
             except (TypeError, ValueError):
                 pass
     except (TypeError, ValueError):
-        errors.append("❗ **Diastolic BP** must be a whole number between 40 and 140 mmHg.")
+        errors.append("**Diastolic BP** must be a whole number between 40 and 140 mmHg.")
 
     # ── Serum Creatinine ─────────────────────────────────────────────
     try:
         cr = float(creatinine)
         if cr < 0.1 or cr > 15.0:
-            errors.append("❗ **Serum Creatinine** must be between 0.1 and 15.0 mg/dL.")
+            errors.append("**Serum Creatinine** must be between 0.1 and 15.0 mg/dL.")
     except (TypeError, ValueError):
-        errors.append("❗ **Serum Creatinine** must be a number between 0.1 and 15.0.")
+        errors.append("**Serum Creatinine** must be a number between 0.1 and 15.0.")
 
     # ── Sodium ───────────────────────────────────────────────────────
     try:
         na = float(sodium)
         if na < 115.0 or na > 170.0:
-            errors.append("❗ **Sodium** must be between 115.0 and 170.0 mEq/L.")
+            errors.append("**Sodium** must be between 115.0 and 170.0 mEq/L.")
     except (TypeError, ValueError):
-        errors.append("❗ **Sodium** must be a number between 115.0 and 170.0 mEq/L.")
+        errors.append("**Sodium** must be a number between 115.0 and 170.0 mEq/L.")
 
     # ── Potassium ────────────────────────────────────────────────────
     try:
         k = float(potassium)
         if k < 2.0 or k > 7.0:
-            errors.append("❗ **Potassium** must be between 2.0 and 7.0 mEq/L.")
+            errors.append("**Potassium** must be between 2.0 and 7.0 mEq/L.")
     except (TypeError, ValueError):
-        errors.append("❗ **Potassium** must be a number between 2.0 and 7.0 mEq/L.")
+        errors.append("**Potassium** must be a number between 2.0 and 7.0 mEq/L.")
 
     return errors
 
@@ -567,8 +558,8 @@ def _get_parameter_range_info(param_name, value):
         elif param_info['check_elevated'](value):
             return {
                 'range': param_info['elevated_range'],
-                'status': 'Above reference range',
-                'status_class': 'status-above'
+                'status': 'Within reference range',
+                'status_class': 'status-normal'
             }
         else:
             return {
@@ -718,7 +709,8 @@ if _show_form:
         
         with col_next:
             if current_step < 4:
-                if st.button(f"Step {current_step + 1} →", use_container_width=True, key="wizard_next", type="primary"):
+                disabled_next = current_step == 1 and not st.session_state.get("pat_name")
+                if st.button(f"Step {current_step + 1} →", use_container_width=True, key="wizard_next", type="primary", disabled=disabled_next):
                     st.session_state.wizard_step = current_step + 1
                     st.rerun()
 
@@ -736,7 +728,7 @@ if _show_form:
 
         # Row 1 — Name spans full width for comfortable entry
         pat_name = st.text_input(
-            "Patient Name",
+            "Patient Name *",
             value=st.session_state.get("pat_name", ""),
             max_chars=100,
             placeholder="Enter the patient's full name",
@@ -899,10 +891,10 @@ if _show_form:
             hba1c=5.5, glucose=90, bp=120, bp_diastolic=80,
             creatinine=1.0, sodium=138.0, potassium=4.5,
         )
-        step1_errors = [e for e in step1_errors if "Patient Name" in e or "Age" in e or "Height" in e or "Weight" in e]
+        step1_errors = [e for e in step1_errors if any(k in e for k in ("**Age**", "**Height**", "**Weight**", "**HbA1c**", "**Blood Glucose**", "**Systolic BP**", "**Diastolic BP**", "**Serum Creatinine**", "**Sodium**", "**Potassium**"))]
 
         if step1_errors:
-            st.error("### ⚠️ Please fix the following before proceeding:")
+# Validation errors displayed below (patient name errors filtered out)
             for err in step1_errors:
                 st.markdown(err)
 
