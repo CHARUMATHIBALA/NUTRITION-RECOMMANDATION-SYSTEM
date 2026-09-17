@@ -1,0 +1,132 @@
+﻿[INFO] imbalanced-learn not installed - SMOTE skipped for kidney model.
+       Install with:  pip install imbalanced-learn
+
+============================================================
+  Smart Health Dashboard - Model Retraining Pipeline
+============================================================
+  Target accuracy: 80%
+  Random state   : 42
+  Test split     : 20%
+
+============================================================
+  MODEL 1 — DIABETES  (disease_model.pkl)
+============================================================
+    Rows after filter: 90056
+    Class distribution:
+disease
+prediabetes    37140
+no diabetes    33923
+diabetes       18993
+
+    Encoder classes: ['diabetes', 'no diabetes', 'prediabetes']
+    Train: 72044  Test: 18012
+    Training time: 1.8s
+    Accuracy  : 1.0000  [PASS]
+    Precision : 1.0000
+    Recall    : 1.0000
+    F1 (wtd)  : 1.0000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00      3799
+           1       1.00      1.00      1.00      6785
+           2       1.00      1.00      1.00      7428
+
+    accuracy                           1.00     18012
+   macro avg       1.00      1.00      1.00     18012
+weighted avg       1.00      1.00      1.00     18012
+
+    saved -> disease_model.pkl
+    saved -> disease_encoder.pkl
+
+============================================================
+  MODEL 2 — KIDNEY DISEASE  (kidney_model.pkl)
+============================================================
+    Rows: 399
+    Class distribution after strip:
+disease
+Kidney Disease       250
+No Kidney Disease    149
+
+    Encoder classes: ['Kidney Disease', 'No Kidney Disease']
+    Encoded distribution: {np.int64(0): np.int64(250), np.int64(1): np.int64(149)}
+    Train: 319  Test: 80
+    GBT training time: 0.8s
+    GBT accuracy: 0.9500
+    RF  accuracy: 0.9500
+    Selected: GBT
+
+    Accuracy  : 0.9500  [PASS]
+    Precision : 0.9500
+    Recall    : 0.9500
+    F1 (wtd)  : 0.9500
+
+              precision    recall  f1-score   support
+
+           0       0.96      0.96      0.96        50
+           1       0.93      0.93      0.93        30
+
+    accuracy                           0.95        80
+   macro avg       0.95      0.95      0.95        80
+weighted avg       0.95      0.95      0.95        80
+
+    saved -> kidney_model.pkl
+    saved -> kidney_encoder.pkl
+
+============================================================
+  MODEL 3 — OBESITY  (obesity_model.pkl)
+============================================================
+    Rows: 1959
+    Class distribution:
+disease
+Obesity_Type_I         339
+Obesity_Type_III       284
+Overweight_Level_II    280
+Obesity_Type_II        276
+Normal_Weight          272
+Overweight_Level_I     263
+Insufficient_Weight    245
+
+    Integer label distribution: {np.int64(0): np.int64(245), np.int64(1): np.int64(272), np.int64(2): np.int64(339), np.int64(3): np.int64(276), np.int64(4): np.int64(284), np.int64(5): np.int64(263), np.int64(6): np.int64(280)}
+    Train: 1567  Test: 392
+    Training time: 0.6s
+    Accuracy  : 0.9515  [PASS]
+    Precision : 0.9527
+    Recall    : 0.9515
+    F1 (wtd)  : 0.9515
+
+              precision    recall  f1-score   support
+
+           0       0.96      0.96      0.96        49
+           1       0.96      0.94      0.95        54
+           2       0.92      1.00      0.96        68
+           3       0.98      0.91      0.94        55
+           4       1.00      0.98      0.99        57
+           5       0.91      0.94      0.93        53
+           6       0.94      0.91      0.93        56
+
+    accuracy                           0.95       392
+   macro avg       0.95      0.95      0.95       392
+weighted avg       0.95      0.95      0.95       392
+
+    saved -> obesity_model.pkl
+    saved -> obesity_encoder.pkl
+
+============================================================
+  GENDER ENCODER  (gender_encoder.pkl)
+============================================================
+    classes: [np.str_('Female'), np.str_('Male')]
+    saved -> gender_encoder.pkl
+    Gender encoder refreshed.
+
+============================================================
+  TRAINING SUMMARY
+============================================================
+  diabetes      accuracy=1.0000  [PASS]
+  kidney        accuracy=0.9500  [PASS]
+  obesity       accuracy=0.9515  [PASS]
+
+  All models meet the 80 % accuracy target.
+  .pkl files replaced in project root.
+  Backup files: *.pkl.bak (safe to delete after verification).
+

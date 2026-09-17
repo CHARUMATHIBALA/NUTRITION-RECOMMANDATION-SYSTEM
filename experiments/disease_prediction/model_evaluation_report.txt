@@ -1,0 +1,16 @@
+Model Evaluation Report
+========================
+
+No real evaluation dataset was found in the repository.
+Consequently, scientific performance metrics (accuracy, precision, recall, etc.) are omitted.
+The script performed basic sanity checks on each model using synthetic inputs.
+
+--- Details ---
+
+No real evaluation dataset found in the repository.
+Synthetic evaluation is disabled. Generating sanity‑check report only.
+Obesity model sanity check: Predicted 10 samples, unique classes: [np.int64(0), np.int64(1), np.int64(2), np.int64(3), np.int64(4), np.int64(6)]
+Diabetes model sanity check: Predicted 10 samples, unique classes: [np.int64(0), np.int64(2)]
+Kidney model sanity check: Predicted 10 samples, unique classes: [np.int64(0), np.int64(2)]
+
+End of report.

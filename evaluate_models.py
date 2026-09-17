@@ -142,23 +142,7 @@ def generate_kidney_data(n=N_SAMPLES):
 # Helper functions for dataset discovery and reporting
 # ────────────────────────────────────────────────────────────────────
 
-def find_evaluation_dataset():
-    """Search the project for a CSV file that could serve as a test dataset.
-    Looks for common naming patterns. Returns the absolute path if found, else None.
-    """
-    patterns = [
-        "**/*train*.csv",
-        "**/*test*.csv",
-        "**/*_dataset.csv",
-        "**/*_data.csv",
-    ]
-    for pat in patterns:
-        matches = glob.glob(os.path.join(BASE_DIR, pat), recursive=True)
-        if matches:
-            for m in matches:
-                if os.path.basename(m).lower() != "food_dataset.csv":
-                    return m
-    return None
+
 
 
 def load_evaluation_dataframe(csv_path, model_features):
@@ -167,7 +151,7 @@ def load_evaluation_dataframe(csv_path, model_features):
     column can be inferred, otherwise returns (X, None).
     """
     df = pd.read_csv(csv_path)
-    possible_label_cols = ["label", "target", "class", "diagnosis", "outcome"]
+    possible_label_cols = ["label", "target", "class", "diagnosis", "outcome", "bmi_category", "disease", "severity"]
     label_col = None
     for col in possible_label_cols:
         if col in df.columns:
@@ -461,39 +445,37 @@ def plot_roc_auc_comparison(all_results):
 # ────────────────────────────────────────────────────────────────────
 # Main evaluation pipeline (enhanced)
 # ────────────────────────────────────────────────────────────────────
-
-def main():
-    parser = argparse.ArgumentParser(description="Evaluate disease prediction models")
-    parser.add_argument("--allow-synthetic", action="store_true",
-                        help="When set, fall back to synthetic label evaluation if no real dataset is found (for backward compatibility).")
-    args = parser.parse_args()
-
-    print("=" * 60)
-    print("  BASELINE DISEASE PREDICTION MODEL EVALUATION")
-    print("=" * 60)
-    print(f"  Random state : {RANDOM_STATE}")
-    print(f"  Test size    : {TEST_SIZE}")
-    print(f"  N samples    : {N_SAMPLES}")
-    print("=" * 60)
-
-    dataset_path = find_evaluation_dataset()
-    report_lines = []
-    all_results = {}
-
-    if dataset_path:
-        report_lines.append(f"Real evaluation dataset found: {dataset_path}")
-    else:
-        report_lines.append("No real evaluation dataset found in the repository.")
-        if not args.allow_synthetic:
-            report_lines.append("Synthetic evaluation is disabled. Generating sanity‑check report only.")
-            for model, name, gen_func in [
-                (obesity_model, "obesity", generate_obesity_data),
-                (disease_model, "diabetes", generate_diabetes_data),
-                (kidney_model, "kidney", generate_kidney_data),
-            ]:
-                X_demo = gen_func(n=10)
-                result = evaluate_model(model, X_demo, None, model.classes_, name)
-                report_lines.append(f"{name.title()} model sanity check: {result['prediction_info']}")
+        if dataset_path:
+            required_features = list(gen_func().columns)
+            X, y = load_evaluation_dataframe(dataset_path, required_features)
+            # Encode categorical feature 'gender' using the shared gender_encoder (if present)
+            if 'gender' in X.columns:
+                try:
+                    X['gender'] = gender_encoder.transform(X['gender'])
+                except Exception as e:
+                    print(f"  [WARN] Gender encoding failed for {name}: {e}")
+            # Encode true labels using the model‑specific encoder
+            if y is not None:
+                try:
+                    if name == 'obesity':
+                        y = obesity_encoder.transform(y)
+                    elif name == 'diabetes':
+                        y = disease_encoder.transform(y)
+                    elif name == 'kidney':
+                        y = kidney_encoder.transform(y)
+                except Exception as e:
+                    print(f"  [WARN] Label encoding failed for {name}: {e}")
+                    y = None
+            if y is None:
+                report_lines.append(f"Dataset {dataset_path} does not contain a recognizable label column for {name}. Using synthetic labels.")
+                y = _generate_labels(model, X.shape[0])
+            else:
+                # Ensure y is a pandas Series for compatibility
+                if not isinstance(y, pd.Series):
+                    y = pd.Series(y)
+        else:
+            X = gen_func()
+            y = _generate_labels(model, X.shape[0]))} model sanity check: {result['prediction_info']}")
                 all_results[name] = result
             report_path = os.path.join(EXPERIMENTS_DIR, "model_evaluation_report.txt")
             write_evaluation_report(report_path, dataset_found=False, details=report_lines)
@@ -510,10 +492,33 @@ def main():
         print(f"\n>> Evaluating {name.upper()} model...")
         if dataset_path:
             required_features = list(gen_func().columns)
-            X, y = load_evaluation_dataframe(dataset_path, required_features)
-            if y is None:
-                report_lines.append(f"Dataset {dataset_path} does not contain a recognizable label column for {name}. Using synthetic labels.")
-                y = _generate_labels(model, X.shape[0])
+        X, y = load_evaluation_dataframe(dataset_path, required_features)
+        # Encode categorical feature 'gender' using the shared gender_encoder (if present)
+        if 'gender' in X.columns:
+            try:
+                X['gender'] = gender_encoder.transform(X['gender'])
+            except Exception as e:
+                print(f"  [WARN] Gender encoding failed for {name}: {e}")
+        # Encode true labels using the model‑specific encoder
+        if y is not None:
+            try:
+                if name == 'obesity':
+                    y = obesity_encoder.transform(y)
+                elif name == 'diabetes':
+                    y = disease_encoder.transform(y)
+                elif name == 'kidney':
+                    y = kidney_encoder.transform(y)
+            except Exception as e:
+                print(f"  [WARN] Label encoding failed for {name}: {e}")
+                y = None
+        if y is None:
+            report_lines.append(f"Dataset {dataset_path} does not contain a recognizable label column for {name}. Using synthetic labels.")
+            y = _generate_labels(model, X.shape[0])
+        else:
+            # Ensure y is a pandas Series for compatibility
+            if not isinstance(y, pd.Series):
+                y = pd.Series(y)
+
         else:
             X = gen_func()
             y = _generate_labels(model, X.shape[0])
