@@ -1,0 +1,37 @@
+============================= test session starts =============================
+collected 58 items
+
+tests\test_ncf.py ...........................F.......                    [ 60%]
+test_weekly_meal_planner.py ..................F....                      [100%]
+
+================================== FAILURES ===================================
+_______ TestScoringInformation.test_ncf_available_field_matches_reality _______
+tests\test_ncf.py:436: in test_ncf_available_field_matches_reality
+    assert scoring.get("ncf_available") == ncf_is_available(), (
+E   AssertionError: scoring_info.ncf_available does not match ncf_service.is_available()
+E   assert False == True
+E    +  where False = <built-in method get of dict object at 0x000001DF2A9CF980>('ncf_available')
+E    +    where <built-in method get of dict object at 0x000001DF2A9CF980> = {'ncf_available': False, 'w_nutrition': 0.625, 'w_content': 0.375, 'w_ncf': 0.0, ...}.get
+E    +  and   True = <function is_available at 0x000001DF2AA01800>()
+______________ TestWeeklyMealPlanner.test_meal_validation_block _______________
+test_weekly_meal_planner.py:311: in test_meal_validation_block
+    assert mv['is_valid'] is True
+E   assert False is True
+============================== warnings summary ===============================
+tests/test_ncf.py::TestValidPrediction::test_score_is_float_in_unit_interval
+tests/test_ncf.py::TestValidPrediction::test_different_foods_produce_different_scores
+tests/test_ncf.py::TestValidPrediction::test_different_foods_produce_different_scores
+  C:\Users\charu\AppData\Local\Programs\Python\Python313\Lib\site-packages\keras\src\utils\python_utils.py:190: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+    value = float(value)
+
+tests/test_ncf.py::TestExistingTestsStillPass::test_predict_functions_return_risk_result
+tests/test_ncf.py::TestExistingTestsStillPass::test_predict_functions_return_risk_result
+tests/test_ncf.py::TestExistingTestsStillPass::test_predict_functions_return_risk_result
+  C:\Users\charu\AppData\Local\Programs\Python\Python313\Lib\site-packages\sklearn\utils\validation.py:2742: UserWarning: X has feature names, but GradientBoostingClassifier was fitted without feature names
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_ncf.py::TestScoringInformation::test_ncf_available_field_matches_reality
+FAILED test_weekly_meal_planner.py::TestWeeklyMealPlanner::test_meal_validation_block
+================== 2 failed, 56 passed, 6 warnings in 40.92s ==================

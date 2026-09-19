@@ -285,7 +285,11 @@ class EnhancedNutritionRecommender:
     def __init__(self):
         self.df = food_df.copy()
         self._w_nutrition, self._w_content, self._w_ncf = _load_and_validate_weights()
-        self._ncf_available: bool = _NCF_AVAILABLE
+        # Re-check NCF availability at instantiation time rather than relying on
+        # the module-level constant (which was set at import time and may be stale
+        # if the model was trained after the module was first imported).
+        from backend.services.ncf_service import is_available as _ncf_is_available
+        self._ncf_available: bool = _ncf_is_available()
         self._eff_w_nutrition, self._eff_w_content, self._eff_w_ncf = (
             self._compute_effective_weights()
         )

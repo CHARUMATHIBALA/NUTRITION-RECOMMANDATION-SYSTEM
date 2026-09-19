@@ -101,3 +101,44 @@ RISK_BADGE_CLASS = {
     "medium": "pred-risk-medium",
     "low": "pred-risk-low",
 }
+
+# ── Neural Collaborative Filtering (NCF) configuration ──────────────────────
+# These settings control the NeuMF architecture and training pipeline.
+# Weights must sum to 1.0 (enforced by _validate_hybrid_weights above).
+
+# Embedding dimensionality for both GMF and MLP components
+NCF_EMBEDDING_DIM: int = 32
+
+# MLP hidden layer sizes (after concatenating user + item embeddings)
+NCF_MLP_LAYERS: list = [64, 32]
+
+# Dropout rate applied after each MLP hidden layer
+NCF_DROPOUT_RATE: float = 0.2
+
+# Learning rate for Adam optimiser
+NCF_LEARNING_RATE: float = 0.001
+
+# Training epochs (early stopping will usually fire before this limit)
+NCF_EPOCHS: int = 30
+
+# Mini-batch size
+NCF_BATCH_SIZE: int = 256
+
+# Negative-to-positive sampling ratio (4 negatives per positive interaction)
+NCF_NEGATIVE_RATIO: int = 4
+
+# Rating threshold above which an interaction is considered positive
+# Ratings >= this value → label 1 (positive); below → label 0 (negative)
+NCF_POSITIVE_THRESHOLD: float = 3.5
+
+# Fixed random seed for reproducible training and negative sampling
+NCF_RANDOM_SEED: int = 42
+
+# Early-stopping patience (epochs without val_loss improvement)
+NCF_EARLY_STOPPING_PATIENCE: int = 5
+
+# Paths (relative to project root)
+NCF_MODEL_PATH: str = "ncf_integration/models/ncf_model.keras"
+NCF_MAPPINGS_PATH: str = "ncf_integration/models/ncf_mappings.json"
+NCF_METADATA_PATH: str = "ncf_integration/models/training_metadata.json"
+NCF_INTERACTIONS_CSV: str = "ncf_integration/data/user_food_interactions.csv"

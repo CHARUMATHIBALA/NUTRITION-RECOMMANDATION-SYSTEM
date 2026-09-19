@@ -1628,7 +1628,27 @@ if st.session_state.get("analysis_in_progress", False):
                 "sodium":     float(data["sodium"]),
                 "potassium":  float(data["potassium"]),
                 "creatinine": float(data["creatinine"]),
+                # NCF user identifier — used by enhanced_recommender to look
+                # up the user in ncf_mappings when NCF is available.
+                "username":   str(name or username or ""),
             }
+
+            # ── Passive NCF interaction recording ─────────────────────
+            # Record every food in the generated meal plan as a 'selected'
+            # interaction.  This is a passive signal: the system chose the
+            # food and showed it to the user.  Strong-positive 'swapped_to'
+            # and weak-negative 'swapped_away' signals are recorded in the
+            # swap UI block.  All recording is best-effort; any error is
+            # silently swallowed so a DB hiccup never blocks the UI.
+            try:
+                from backend.services.interaction_service import record_meal_plan_selections
+                _active_username = name or username or ""
+                if _active_username:
+                    _meal_plan_for_recording = data["recommendations"].get("meal_plan", {})
+                    if _meal_plan_for_recording:
+                        record_meal_plan_selections(_active_username, _meal_plan_for_recording)
+            except Exception:
+                pass  # interaction recording is best-effort
 
             # Clear loading state and temporary data
             if "analysis_data" in st.session_state:
