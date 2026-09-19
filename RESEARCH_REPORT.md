@@ -1337,11 +1337,11 @@ All figures can be generated from existing code/data. No fabrication needed.
 
 ### Table 6 — Hybrid Scoring Weights
 
-| Component | Configured | Effective (NCF off) | Formula role |
-|-----------|-----------|---------------------|-------------|
-| Nutrition | 0.50 | 0.6250 | nutrition_blended × w |
-| Content | 0.30 | 0.3750 | content_score × w |
-| NCF | 0.20 | 0.0000 | 0.0 (unavailable) |
+| Component | Configured | Effective — NCF active (known user) | Effective — NCF fallback (unknown user) | Formula role |
+|-----------|-----------|-------------------------------------|----------------------------------------|-------------|
+| Nutrition | 0.50 | 0.5000 | 0.6250 | nutrition_blended × w |
+| Content | 0.30 | 0.3000 | 0.3750 | content_score × w |
+| NCF | 0.20 | 0.2000 | 0.0000 | NeuMF prediction × w |
 
 ### Table 7 — Personalization Inputs
 
